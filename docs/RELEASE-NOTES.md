@@ -1,23 +1,23 @@
-# Airplay 0.2.6
+# Airplay 0.2.7
 
-Changes since Airplay 0.2.4.
+Changes since Airplay 0.2.6.
 
-## New look
+## HomePod stuck on "Connecting"
 
-- Apple system colours in light and dark mode, rounder panel and cards, and a solid blue speaker tile.
-- The panel springs up from the taskbar when it opens. The status dot shows the state: green when connected, a blue pulse while connecting, orange when another device has the speaker, red on error.
-- Level bars move on the speaker that is playing.
-- Errors open in a black pill over the header, settle to a compact pill after a few seconds, and reopen when clicked.
-- New icon and the bundled Inter font. SF Pro is used if it is installed.
+- On HomePod software 27.2 the HomePod accepted the connection and announced its clock, but never sent the timing packets Airplay waits for, so every attempt ended with "PTP exchange did not become ready" and the panel stayed on "Connecting".
+- Airplay now introduces itself to the HomePod's clock the way a Mac does, and if the clock stays idle it prompts it to start with the sequence the open-source nqptp project uses for Apple receivers. Both are tried twice per connection attempt.
+- This fix has not been tested against a real HomePod. If it still does not connect, the log now contains what is needed to see why.
 
-## Install fixes
+## Compact panel
 
-- The installer now places the audio engine next to Airplay.exe and adds a Windows Firewall rule for it, limited to the local network. Before, the engine ran from a folder that changed with every update, so Windows Firewall could prompt again or block HomePod clock sync.
-- Uninstall now removes the start-with-Windows entry.
-- Old copies of the engine in %LOCALAPPDATA% are cleaned up.
-- The installer is a single page with an "Open Airplay now" option at the end.
-- The installer and Windows sign-out can now close Airplay when only its tray icon is running.
+- The panel is 320 wide instead of 400, with tighter spacing. The Connect button keeps its full height.
+- The error pop-up now sits beside the Quit button and never covers it.
 
-Run **Airplay-0.2.6.msi** to install or to upgrade 0.2.4 in place. Before upgrading from 0.2.4, quit Airplay from its tray menu. 0.2.4 cannot be closed by the installer when its panel has not been opened since sign-in. If setup says Airplay could not exit, end Airplay.exe in Task Manager and run setup again. From 0.2.6 on, the installer closes Airplay itself. The portable **Airplay.exe** still works but does not get the firewall rule. Verify downloads with **SHA256SUMS.txt**. Binaries are unsigned, so Windows SmartScreen may ask you to confirm the first run.
+## Diagnostics
 
-The installer's install, upgrade, repair and uninstall steps and its firewall rule are tested automatically on Windows. No real HomePod playback test was run for this release.
+- A failed connection now records how many wake attempts were made, what Airplay sent, and the first and latest packet of each kind the HomePod sent.
+- The log records the HomePod's model and software version and its timing reply for each attempt.
+
+Run **Airplay-0.2.7.msi** to install or upgrade. The portable **Airplay.exe** still works but does not get the firewall rule. Verify downloads with **SHA256SUMS.txt**. Binaries are unsigned, so Windows SmartScreen may ask you to confirm the first run.
+
+Logs are in `%APPDATA%\Airplay\logs`.

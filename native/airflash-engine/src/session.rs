@@ -724,6 +724,16 @@ impl Member {
             .plist_request("SETUP", &member.uri, &dictionary(setup))?
             .plist()?;
         member.session_started = true;
+        if clock_id.is_some() {
+            // What the receiver says about its own PTP port. Only key names and
+            // the timing dictionary are reported; stream keys never are.
+            let reply = response.as_dictionary();
+            emit(json!({
+                "event":"setup_timing","host":peer.host,
+                "keys":reply.map(|d| d.keys().collect::<Vec<_>>()),
+                "timing_peer_info":reply.and_then(|d| d.get("timingPeerInfo")).and_then(|v| serde_json::to_value(v).ok()),
+            }));
+        }
         let event_port = get_port(&response, "eventPort")?;
         member.event_addr = Some(SocketAddr::new(peer.host, event_port));
         member.events = Some(EventWorker::connect(

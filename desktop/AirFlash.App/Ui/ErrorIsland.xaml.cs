@@ -14,9 +14,9 @@ namespace AirFlash.App.Ui;
 /// Only sizes, opacity and a render scale animate; nothing runs while closed.</summary>
 public partial class ErrorIsland : UserControl
 {
-    private const double CompactWidth = 132, CompactHeight = 34;
-    // Narrow enough to leave the header's Quit button (right 34 DIP) clickable.
-    private const double ExpandedWidth = 292, ExpandedHeight = 72;
+    private const double CompactWidth = 132, CompactHeight = 32;
+    // The panel's content is 290 DIP wide; this stops 40 DIP short, left of Quit.
+    private const double ExpandedWidth = 248, ExpandedHeight = 72;
     private static readonly TimeSpan Settle = TimeSpan.FromSeconds(4.5);
     private static readonly TimeSpan Quick = TimeSpan.FromMilliseconds(220);
     private readonly DispatcherTimer _settle;

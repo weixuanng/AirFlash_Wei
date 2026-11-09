@@ -11,7 +11,7 @@ namespace AirFlash.App.Ui;
 
 public partial class ControlPanel : Window
 {
-    public const double CompactWidth = 400;
+    public const double CompactWidth = 320;
     private readonly AppViewModel _viewModel;
     private bool _allowClose;
     private bool _placing;

@@ -43,6 +43,50 @@ with the receiver model when a `sync`-sourced offset behaves incorrectly.
 An OS error code in `last_send_error` or `last_receive_error` identifies a local
 socket failure. Normal nonblocking polling is not logged as an error.
 
+## A followed receiver announces but never syncs
+
+`waiting_sync_pair` with many Announce (type 11) and Signaling (type 12)
+datagrams, no Sync (type 0) or Follow_Up (type 8), and `received_grants` 0 means
+the receiver is reachable and names itself grandmaster, but its clock is idle.
+A HomePod on software 27.2 does this to a sender that never takes part in PTP
+as a clock; it does not answer the unicast subscription requests, and HomePods
+do not answer a Delay_Req that carries a real clock identity.
+
+From 0.2.7 the engine uses two remedies taken from working implementations:
+
+1. **Introduction**, sent as soon as SETPEERS is accepted. It is what a Mac
+   sends when it joins as a clock that will follow: three Sync/Follow_Up pairs
+   125 ms apart, two Announces with priority1 250 (worse than a HomePod's 248),
+   then one Signaling with an 802.1AS message-interval request (Sync 8 per
+   second, Announce 4 per second) and two Apple extension TLVs.
+2. **Wake**, if three Announces still arrive without Sync traffic 1.5 s later.
+   This is nqptp's sequence for a silent Apple clock: one Announce with a
+   priority1 one step better than the receiver's, then two Announces one step
+   worse, 150 ms apart.
+
+If the clock stays silent the engine repeats the introduction after 2 s, this
+time with the message-interval request encoded without its two reserved bytes,
+and wakes once more 1.5 s after that, then stops. Silence means three Announces
+and no Sync or Follow_Up for 1.5 s, so a receiver that syncs slowly is not woken. A single complete pair restores
+that budget; once three exchanges have made the clock usable it is never nudged
+again for that session, so a streaming receiver is left alone.
+
+The snapshot reports `introductions`, `wake_attempts`, `announces_without_sync`
+and `announces_naming_us` (Announces in which the receiver named the engine as
+grandmaster). `first_pair_ms`, `first_pair_after_wakes` and
+`first_pair_after_introductions` say when the first complete pair arrived and
+which remedy preceded it. `packets.sent_by_type` counts what the engine sent,
+and `packets.first_received` / `packets.last_received` hold the first and latest
+datagram of each received type as hex, up to 128 bytes. The log also records
+`Receiver info:` (model and software version) and `Receiver timing:` (the key
+names and `timingPeerInfo` of the receiver's SETUP reply, at most 2 KB).
+
+These entries contain local network addresses and a clock identity derived
+from a network adapter address. Remove them before posting a log publicly.
+
+If Sync still never arrives, include the whole `Session failure` entry in the
+report: the Announce and Signaling samples show what the receiver expects.
+
 ## Connected but no audio on a standalone HomePod
 
 A standalone HomePod on HomePod software 27 keeps announcing itself as the PTP

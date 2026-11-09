@@ -57,7 +57,7 @@
       </Setter>
     </Style>
   </Window.Resources>
-  <Border x:Name="Card" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="14" Padding="16" Background="{DynamicResource CanvasBrush}">
+  <Border x:Name="Card" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="14" Padding="14" Background="{DynamicResource CanvasBrush}">
     <Grid>
       <Grid.RowDefinitions>
         <RowDefinition Height="Auto"/>
@@ -65,14 +65,14 @@
         <RowDefinition Height="*"/>
         <RowDefinition Height="Auto"/>
       </Grid.RowDefinitions>
-      <Grid Margin="2,0,0,18">
+      <Grid Margin="2,0,0,12">
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="*"/>
           <ColumnDefinition Width="Auto"/>
         </Grid.ColumnDefinitions>
         <StackPanel Orientation="Horizontal">
-          <Image Source="{StaticResource AppLogo}" Width="26" Height="26" VerticalAlignment="Center" Margin="0,2,10,0"/>
-          <TextBlock Text="Airplay" FontFamily="{StaticResource DisplayFont}" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center"/>
+          <Image Source="{StaticResource AppLogo}" Width="22" Height="22" VerticalAlignment="Center" Margin="0,1,8,0"/>
+          <TextBlock Text="Airplay" FontFamily="{StaticResource DisplayFont}" FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center"/>
         </StackPanel>
         <Button Grid.Column="1" Style="{StaticResource IconButton}" ToolTip="{loc:Text 'Quit'}" AutomationProperties.Name="{loc:Text 'Quit'}" Click="OnQuit" Margin="0,0,0,0"><Viewbox Width="18" Height="18"><Path Data="M 10,3 L 3,3 3,21 10,21 M 8,12 L 22,12 M 17,7 L 22,12 17,17" Stroke="{DynamicResource TextBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/></Viewbox></Button>
       </Grid>
@@ -108,7 +108,7 @@
           <ItemsControl ItemsSource="{Binding Receivers}" loc:Motion.Stagger="True">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Border Padding="12" Margin="0,0,0,10" CornerRadius="12" BorderThickness="1">
+                <Border Padding="10" Margin="0,0,0,8" CornerRadius="12" BorderThickness="1">
                   <Border.Style>
                     <Style TargetType="Border">
                       <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
@@ -123,12 +123,12 @@
                   </Border.Style>
                   <Grid>
                     <Grid.ColumnDefinitions>
-                      <ColumnDefinition Width="44"/>
+                      <ColumnDefinition Width="42"/>
                       <ColumnDefinition Width="*"/>
                       <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <Border Background="{DynamicResource AccentBrush}" Width="34" Height="34" CornerRadius="9" VerticalAlignment="Center">
-                      <Viewbox Width="19" Height="19" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Border Background="{DynamicResource AccentBrush}" Width="32" Height="32" CornerRadius="8" HorizontalAlignment="Left" VerticalAlignment="Center">
+                      <Viewbox Width="18" Height="18" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center">
                         <Grid Width="24" Height="24">
                           <Path x:Name="ReceiverIcon" Data="{StaticResource ReceiverIconGeometry}" Stroke="{DynamicResource AccentForegroundBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
                         </Grid>
@@ -153,7 +153,7 @@
         </StackPanel>
       </ScrollViewer>
       <StackPanel Grid.Row="3" Margin="2,4,2,0">
-        <Button Style="{StaticResource PrimaryButton}" Command="{Binding PrimaryCommand}" ToolTip="{Binding PrimaryLabel}" AutomationProperties.Name="{Binding PrimaryLabel}" HorizontalAlignment="Stretch" Margin="0,2,0,14">
+        <Button Style="{StaticResource PrimaryButton}" Command="{Binding PrimaryCommand}" ToolTip="{Binding PrimaryLabel}" AutomationProperties.Name="{Binding PrimaryLabel}" HorizontalAlignment="Stretch" Margin="0,2,0,10">
           <StackPanel Orientation="Horizontal">
             <Viewbox Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
               <Grid Width="24" Height="24">
@@ -171,7 +171,7 @@
                 </Path>
               </Grid>
             </Viewbox>
-            <TextBlock Text="{Binding PrimaryLabel}" VerticalAlignment="Center" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"/>
+            <TextBlock Text="{Binding PrimaryLabel}" VerticalAlignment="Center" MaxWidth="230" TextTrimming="CharacterEllipsis" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"/>
           </StackPanel>
         </Button>
         <DockPanel>
@@ -190,7 +190,7 @@
           </Ellipse>
           <TextBlock Text="{Binding StatusTitle, NotifyOnTargetUpdated=True}" FontWeight="SemiBold" FontSize="12" loc:Motion.FadeOnUpdate="True"/>
         </DockPanel>
-        <TextBlock x:Name="StatusDetailText" Text="{Binding StatusDetail}" Style="{StaticResource Hint}" Margin="15,4,0,0" MaxHeight="62" TextTrimming="CharacterEllipsis" ToolTip="{Binding StatusDetail}" Visibility="{Binding StatusDetail, Converter={StaticResource NonEmpty}}"/>
+        <TextBlock x:Name="StatusDetailText" Text="{Binding StatusDetail}" Style="{StaticResource Hint}" Margin="15,4,0,0" MaxHeight="84" TextTrimming="CharacterEllipsis" ToolTip="{Binding StatusDetail}" Visibility="{Binding StatusDetail, Converter={StaticResource NonEmpty}}"/>
         <TextBlock x:Name="PairingActionHint" Text="{Binding ActionHint, NotifyOnTargetUpdated=True}" Style="{StaticResource Hint}" Margin="15,2,0,0" TextWrapping="Wrap" Visibility="{Binding ActionHint, Converter={StaticResource NonEmpty}}" AutomationProperties.Name="{Binding ActionHint}" AutomationProperties.LiveSetting="Polite" TargetUpdated="OnActionHintUpdated"/>
         <Button Content="{loc:Text 'Reconnect'}" Command="{Binding ReconnectCommand}" Visibility="{Binding CanReconnect, Converter={StaticResource BoolVisibility}}" HorizontalAlignment="Left" Margin="15,8,0,0" Padding="12,4" AutomationProperties.Name="{loc:Text 'Reconnect'}"/>
         <Expander Header="{loc:Text 'View error details'}" Visibility="{Binding ErrorDetails, Converter={StaticResource NonEmpty}}" Margin="0,8,0,0">
@@ -199,8 +199,9 @@
           </ScrollViewer>
         </Expander>
       </StackPanel>
-      <!-- Errors spring open here, over the header, like the Dynamic Island. -->
-      <loc:ErrorIsland Grid.RowSpan="4" Panel.ZIndex="10" Margin="0,-9,0,0" IsOpen="{Binding IslandActive}" Title="{Binding IslandTitle}" Message="{Binding IslandMessage}"/>
+      <!-- Errors spring open here, over the header, like the Dynamic Island. It sits
+           against the Quit button's left edge and grows leftwards, so Quit stays clickable. -->
+      <loc:ErrorIsland Grid.RowSpan="4" Panel.ZIndex="10" Margin="0,-8,40,0" IsOpen="{Binding IslandActive}" Title="{Binding IslandTitle}" Message="{Binding IslandMessage}"/>
     </Grid>
   </Border>
 </Window>

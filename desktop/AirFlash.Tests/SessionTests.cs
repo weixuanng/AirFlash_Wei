@@ -1315,7 +1315,8 @@ public sealed class SessionTests
     }
     private static async Task Until(Func<bool> predicate)
     {
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3)); while (!predicate()) await Task.Delay(5, timeout.Token);
+        // Generous: a loaded CI runner has taken longer than 3 s here and failed a release run.
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15)); while (!predicate()) await Task.Delay(5, timeout.Token);
     }
     [Fact]
     public async Task DeviceVolumeReadsWithoutWritingAndDebouncesLatestTarget()
