@@ -1,13 +1,13 @@
 name: Feature request
-description: Suggest a feature for AirFlash and explain the problem it would solve.
+description: Suggest a feature for Airplay and explain the problem it would solve.
 title: "[Feature]: "
 labels: [enhancement]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for sharing an idea for AirFlash. Please search existing issues and check the [feature plan](https://github.com/Ding-Kyoma/AirFlash#feature-plan) before submitting a request.
-        AirFlash focuses on capturing Windows audio and streaming it to HomePod over AirPlay 2, including related playback and device management features.
+        Thanks for sharing an idea for Airplay. Please search existing issues and check the [feature plan](https://github.com/Ding-Kyoma/AirFlash#feature-plan) before submitting a request.
+        Airplay focuses on capturing Windows audio and streaming it to HomePod over AirPlay 2, including related playback and device management features.
 
   - type: textarea
     id: feature-description
@@ -34,9 +34,9 @@ body:
     id: broader-demand
     attributes:
       label: Demand from other users
-      description: Consider whether other AirFlash users could encounter the same problem or benefit from this feature.
+      description: Consider whether other Airplay users could encounter the same problem or benefit from this feature.
       options:
-        - label: I have considered whether other AirFlash users may have a similar need for this feature.
+        - label: I have considered whether other Airplay users may have a similar need for this feature.
           required: true
 
   - type: checkboxes
@@ -45,7 +45,7 @@ body:
       label: Feature request policy
       description: Please acknowledge both statements before submitting your request.
       options:
-        - label: I understand that requests outside AirFlash's scope will be closed.
+        - label: I understand that requests outside Airplay's scope will be closed.
           required: true
         - label: I understand that the author is under no obligation to implement this feature, and that submitting a request does not guarantee implementation or a delivery date.
           required: true

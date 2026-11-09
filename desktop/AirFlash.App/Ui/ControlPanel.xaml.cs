@@ -1,11 +1,8 @@
 using AirFlash.Core;
 using System.ComponentModel;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using System.Windows.Automation.Peers;
 using System.Windows.Data;
-using System.Windows.Media;
 using System.Windows.Input;
 using System.Windows.Threading;
 using AirFlash.App.Services;
@@ -22,8 +19,6 @@ public partial class ControlPanel : Window
     private DateTime _lastDismissed;
     public bool MenuOpen { get; set; }
     public TrayService? Tray { get; set; }
-    public event Action? SettingsRequested;
-    public event Action<int>? LatencySettingsRequested;
     public event Action? QuitRequested;
     public ControlPanel(AppViewModel viewModel)
     {
@@ -84,32 +79,6 @@ public partial class ControlPanel : Window
     }
     private void OnKeyDown(object sender, KeyEventArgs args) { if (args.Key == Key.Escape) { Hide(); args.Handled = true; } }
     private void OnClosing(object? sender, CancelEventArgs args) { if (!_allowClose) { args.Cancel = true; Hide(); } }
-    private void OnSliderPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs args)
-    {
-        if (sender is not Slider slider || IsInsideThumb(args.OriginalSource as DependencyObject)) return;
-        if (slider.Template.FindName("PART_Track", slider) is not Track track || track.ActualWidth <= 0) return;
-
-        var point = args.GetPosition(track);
-        var value = VolumeSliderMath.ValueFromPosition(point.X, track.ActualWidth, track.Thumb.ActualWidth, slider.Minimum, slider.Maximum);
-        slider.SetCurrentValue(Slider.ValueProperty, value);
-        slider.Focus();
-        args.Handled = true;
-    }
-
-    private static bool IsInsideThumb(DependencyObject? source)
-    {
-        while (source is not null)
-        {
-            if (source is Thumb) return true;
-            source = VisualTreeHelper.GetParent(source);
-        }
-        return false;
-    }
-    private void OnPopupOpened(object? sender, EventArgs args) => MenuOpen = true;
-    private void OnPopupClosed(object? sender, EventArgs args) { MenuOpen = false; if (!IsActive) Hide(); }
-    private void OnSettings(object sender, RoutedEventArgs args) => SettingsRequested?.Invoke();
-    private void OnLatencySettings(object sender, RoutedEventArgs args)
-        => LatencySettingsRequested?.Invoke(_viewModel.CanEditGlobalLatency ? SettingsViewModel.StreamingPage : SettingsViewModel.ReceiversPage);
     private void OnQuit(object sender, RoutedEventArgs args) => QuitRequested?.Invoke();
     private void OnReceiversChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs args)
         => RequestPlacement();

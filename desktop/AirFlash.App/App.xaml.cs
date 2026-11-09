@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Windows;
 using AirFlash.App.Services;
@@ -25,7 +26,7 @@ public partial class App : Application
                     catch (Exception error) { AppPaths.Log($"Diagnostic output failed: {error.Message}"); }
                 }
                 else MessageBox.Show(eventArgs.Exception.Message + "\n\n" + AppPaths.LogDirectory,
-                    "AirFlash startup failed", MessageBoxButton.OK, MessageBoxImage.Error);
+                    "Airplay startup failed", MessageBoxButton.OK, MessageBoxImage.Error);
                 Shutdown(1);
             }
         };
@@ -34,7 +35,6 @@ public partial class App : Application
     private ThemeService? _theme;
     private AppViewModel? _viewModel;
     private ControlPanel? _panel;
-    private SettingsWindow? _settings;
     private TrayService? _tray;
     private EngineInitialization? _engine;
     private bool _quitting;
@@ -44,7 +44,7 @@ public partial class App : Application
     {
         // Initialize before any windows, view models or static choice labels are created.
         var languageIndex = Array.IndexOf(args.Args, "--ui-language");
-        var smokeLanguage = (args.Args.Contains("--ui-smoke") || args.Args.Contains("--tray-smoke") || args.Args.Contains("--ui-perf")) && languageIndex >= 0 && languageIndex + 1 < args.Args.Length
+        var smokeLanguage = (args.Args.Contains("--ui-smoke") || args.Args.Contains("--tray-smoke")) && languageIndex >= 0 && languageIndex + 1 < args.Args.Length
             ? new[] { args.Args[languageIndex + 1] } : null;
         // Verification runs measure final layout; cosmetic entrance motion would
         // leave rows mid-animation (render offset, partial opacity) during checks.
@@ -53,7 +53,6 @@ public partial class App : Application
         {
             L.Initialize(smokeLanguage);
             base.OnStartup(args);
-            Resources["LatencyChoices"] = Choices.Latencies;
             if (args.Args.Contains("--discovery-perf"))
             {
                 var outputIndex = Array.IndexOf(args.Args, "--output");
@@ -75,7 +74,6 @@ public partial class App : Application
             if (args.Args.Contains("--audio-check")) { Shutdown(await AudioCheckAsync(args.Args)); return; }
             if (args.Args.Contains("--ui-smoke")) { Shutdown(await UiSmoke.RunAsync(args.Args)); return; }
             if (args.Args.Contains("--tray-smoke")) { Shutdown(await UiSmoke.RunAsync(args.Args)); return; }
-            if (args.Args.Contains("--ui-perf")) { Shutdown(await UiPerf.RunAsync(args.Args)); return; }
             _instance = new();
             if (!_instance.IsOwner) { await _instance.NotifyExistingAsync(); await _instance.DisposeAsync(); _instance = null; Shutdown(); return; }
             _theme = new();
@@ -85,17 +83,14 @@ public partial class App : Application
             _uiTheme = initial.Theme;
             _theme.SetPreference(_uiTheme);
             L.Initialize(_uiLanguage == "system" ? null : [_uiLanguage]);
-            Resources["LatencyChoices"] = Choices.Latencies;
             var audio = new AudioService();
             var factory = new ExtractingEngineFactory();
             _engine = new(token => QueryEngineAsync(factory, token), AppPaths.Log);
             _viewModel = new(store, new WindowsDiscovery(log: AppPaths.Log), new Autostart(), audio, factory, Dispatcher, _engine);
-            _viewModel.ResetCompleted += Quit;
             _panel = new(_viewModel); MainWindow = _panel;
-            _panel.SettingsRequested += ShowSettings; _panel.LatencySettingsRequested += ShowSettingsPage; _panel.QuitRequested += Quit;
-            _tray = new(_panel, _viewModel, ShowSettings, Quit); _panel.Tray = _tray;
-            _instance.Listen(() => Dispatcher.BeginInvoke(() => { if (_settings is not null) _settings.Activate(); else _panel.ShowPanel(); }));
-            _viewModel.SettingsChanged += OnSettingsChanged;
+            _panel.QuitRequested += Quit;
+            _tray = new(_panel, _viewModel, CheckUpdates, ShowAbout, Quit); _panel.Tray = _tray;
+            _instance.Listen(() => Dispatcher.BeginInvoke(() => _panel.ShowPanel()));
             _viewModel.Start();
             // Auto-start with Windows (--startup) stays quietly in the tray; a
             // manual launch, including the first run, opens the panel.
@@ -107,66 +102,42 @@ public partial class App : Application
         {
             AppPaths.Log(error.ToString());
             if (Program.IsDiagnostic(args.Args)) { WriteOutput(args.Args, new { ok = false, error = error.ToString() }); Shutdown(1); return; }
-            MessageBox.Show(error.Message + "\n\n" + AppPaths.LogDirectory, L.Get("AirFlash startup failed"), MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(error.Message + "\n\n" + AppPaths.LogDirectory, L.Get("Airplay startup failed"), MessageBoxButton.OK, MessageBoxImage.Error);
             Quit();
         }
     }
-    private void OnSettingsChanged()
+    private static readonly HttpClient UpdateClient = new() { MaxResponseContentBufferSize = 1024 * 1024 };
+    private UpdateCheckState? _updates;
+    // Updates are checked only from the tray menu; the result is a dialog,
+    // never a panel section.
+    private async void CheckUpdates()
     {
-        if (_viewModel is null) return;
-        if (_uiTheme != _viewModel.Settings.Theme) { _uiTheme = _viewModel.Settings.Theme; _theme?.SetPreference(_uiTheme); }
-        if (_uiLanguage == _viewModel.Settings.UiLanguage) return;
-        _uiLanguage = _viewModel.Settings.UiLanguage;
-        // Wait for the settings transaction, including Apply/OK, before replacing windows.
-        Dispatcher.BeginInvoke(async () =>
+        if (_viewModel is null || _quitting) return;
+        _updates ??= new(new UpdateService(UpdateClient), Version.Parse(AppPaths.Version));
+        await _updates.CheckAsync();
+        if (_quitting || _updates is null) return;
+        if (_updates is { HasUpdate: true, DownloadPage: { } page })
         {
-            if (_settings is { } applying) await applying.ViewModel.ApplicationCompleted;
-            if (_quitting || _viewModel is null) return;
-            L.Initialize(_uiLanguage == "system" ? null : [_uiLanguage]);
-            Resources["LatencyChoices"] = Choices.Latencies;
-            _viewModel.RefreshLatencyChoices();
-            var showSettings = _settings?.IsVisible == true;
-            var page = _settings?.ViewModel.SelectedPage ?? 0;
-            var showPanel = _panel?.IsVisible == true;
-            _settings?.Close();
-            _tray?.Dispose(); _panel?.ShutdownPanel();
-            _panel = new(_viewModel); MainWindow = _panel;
-            _panel.SettingsRequested += ShowSettings; _panel.LatencySettingsRequested += ShowSettingsPage; _panel.QuitRequested += Quit;
-            _tray = new(_panel, _viewModel, ShowSettings, Quit); _panel.Tray = _tray;
-            foreach (var row in _viewModel.Receivers) row.Refresh();
-            if (showSettings) { ShowSettings(); _settings!.ViewModel.SelectedPage = page; }
-            else if (showPanel) _panel.ShowPanel();
-        }, System.Windows.Threading.DispatcherPriority.ContextIdle);
-    }
-    private void ShowSettings() => ShowSettings(null);
-    private void ShowSettingsPage(int page)
-    {
-        ShowSettings(page);
-        // The panel's latency button leads to settings that live under Advanced.
-        if (page == SettingsViewModel.StreamingPage && _settings is not null) _settings.ViewModel.StreamingAdvancedExpanded = true;
-    }
-    private void ShowSettings(int? page)
-    {
-        if (_viewModel is null) return;
-        _panel?.Hide();
-        if (_settings is not null)
-        {
-            if (page is { } selected) _settings.ViewModel.SelectedPage = selected;
-            if (_settings.WindowState == WindowState.Minimized) _settings.WindowState = WindowState.Normal;
-            _settings.Activate(); return;
+            var open = _panel is { } panel
+                ? MessageBox.Show(panel, _updates.Status + "\n\n" + L.Get("Open the download page?"), L.Get("Update available"), MessageBoxButton.YesNo, MessageBoxImage.Information)
+                : MessageBox.Show(_updates.Status + "\n\n" + L.Get("Open the download page?"), L.Get("Update available"), MessageBoxButton.YesNo, MessageBoxImage.Information);
+            if (open == MessageBoxResult.Yes) Process.Start(new ProcessStartInfo(page.AbsoluteUri) { UseShellExecute = true });
+            return;
         }
-        _settings = new(_viewModel); _settings.Closed += (_, _) => _settings = null;
-        _settings.Show();
-        if (page is { } initial) _settings.ViewModel.SelectedPage = initial;
-        _settings.Activate();
+        if (_panel is { } owner) MessageBox.Show(owner, _updates.Status, L.Get("Airplay"), MessageBoxButton.OK, MessageBoxImage.Information);
+        else MessageBox.Show(_updates.Status, L.Get("Airplay"), MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+    private void ShowAbout()
+    {
+        var text = $"Airplay {AppPaths.DisplayVersion} · Windows x64 · GPLv3 or later.";
+        if (_panel is { } panel) MessageBox.Show(panel, text, L.Get("About Airplay"), MessageBoxButton.OK, MessageBoxImage.Information);
+        else MessageBox.Show(text, L.Get("About Airplay"), MessageBoxButton.OK, MessageBoxImage.Information);
     }
     private async void Quit()
     {
         if (_quitting) return; _quitting = true;
         try
         {
-            if (_settings is { } applying) await applying.ViewModel.ApplicationCompleted;
-            _settings?.Close();
             if (_engine is not null) await _engine.DisposeAsync();
             if (_viewModel is not null) await _viewModel.DisposeAsync();
             _tray?.Dispose(); _panel?.ShutdownPanel();

@@ -1,12 +1,12 @@
 name: Bug report
-description: Report a problem with AirFlash and provide the details needed to investigate it.
+description: Report a problem with Airplay and provide the details needed to investigate it.
 title: "[Bug]: "
 labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting a problem with AirFlash. Please search existing issues before submitting a new report.
+        Thanks for reporting a problem with Airplay. Please search existing issues before submitting a new report.
         Include enough detail for someone else to reproduce the problem. You can attach logs, screenshots, or recordings by dragging them into a text area below.
 
   - type: checkboxes
@@ -31,9 +31,9 @@ body:
     id: reproduction-steps
     attributes:
       label: Steps to reproduce
-      description: List the exact steps starting from launching AirFlash. Include any settings or conditions needed to reproduce the problem reliably.
+      description: List the exact steps starting from launching Airplay. Include any settings or conditions needed to reproduce the problem reliably.
       placeholder: |
-        1. Launch AirFlash.
+        1. Launch Airplay.
         2. Select ...
         3. Click ...
         4. Observe ...
@@ -64,9 +64,9 @@ body:
   - type: input
     id: airflash-version
     attributes:
-      label: AirFlash version
-      description: Copy the version shown in Settings > About, including Preview if shown. If AirFlash cannot start, use AirFlash.exe > Properties > Details > Product version. For a source build, also include the commit SHA.
-      placeholder: "AirFlash X.Y.Z (include Preview or the commit SHA if applicable)"
+      label: Airplay version
+      description: Copy the version shown in the tray menu > About Airplay, including Preview if shown. If Airplay cannot start, use Airplay.exe > Properties > Details > Product version. For a source build, also include the commit SHA.
+      placeholder: "Airplay X.Y.Z (include Preview or the commit SHA if applicable)"
     validations:
       required: true
 
@@ -76,7 +76,7 @@ body:
       label: Installation method
       options:
         - MSI installer
-        - Standalone AirFlash.exe
+        - Standalone Airplay.exe
         - Built from source
         - Other / unknown
     validations:
@@ -87,7 +87,7 @@ body:
     attributes:
       label: Relevant logs
       description: |
-        Reproduce the problem, then open Settings > About > Open log folder, or press Win + R and enter %APPDATA%\AirFlash\logs.
+        Reproduce the problem, then press Win + R and enter %APPDATA%\Airplay\logs.
         Drag the relevant .log files into this field, or compress them into a .zip and upload it here. Include the approximate time the problem occurred, with your time zone, so we can find the relevant entries.
         Review logs before uploading and redact personal information or secrets. Do not upload configuration files or pairing data.
       placeholder: |

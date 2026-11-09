@@ -19,20 +19,20 @@ internal static class AppIconService
         var frames = Frames.Value;
         var frame = frames.FirstOrDefault(frame => frame.Size >= pixels) ?? frames[^1];
         var handle = CreateIconFromResourceEx(frame.Data, (uint)frame.Data.Length, true, 0x00030000, pixels, pixels, 0);
-        if (handle == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot load the AirFlash icon.");
+        if (handle == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot load the Airplay icon.");
         return new NativeIcon(handle);
     }
 
     private static Frame[] ReadFrames()
     {
         using var stream = typeof(AppIconService).Assembly.GetManifestResourceStream("AirFlash.Icon.ico")
-            ?? throw new InvalidDataException("The embedded AirFlash icon is missing.");
+            ?? throw new InvalidDataException("The embedded Airplay icon is missing.");
         using var buffer = new MemoryStream(); stream.CopyTo(buffer);
         var bytes = buffer.ToArray();
         if (bytes.Length < 6 || BitConverter.ToUInt16(bytes, 0) != 0 || BitConverter.ToUInt16(bytes, 2) != 1)
-            throw new InvalidDataException("Invalid AirFlash ICO header.");
+            throw new InvalidDataException("Invalid Airplay ICO header.");
         var count = BitConverter.ToUInt16(bytes, 4);
-        if (count == 0 || bytes.Length < 6 + count * 16) throw new InvalidDataException("Invalid AirFlash ICO directory.");
+        if (count == 0 || bytes.Length < 6 + count * 16) throw new InvalidDataException("Invalid Airplay ICO directory.");
         var frames = new Frame[count];
         for (var i = 0; i < count; i++)
         {
@@ -42,7 +42,7 @@ internal static class AppIconService
             var length = BitConverter.ToUInt32(bytes, entry + 8);
             var offset = BitConverter.ToUInt32(bytes, entry + 12);
             if (width != height || length == 0 || offset < 6 + count * 16 || (ulong)offset + length > (ulong)bytes.Length)
-                throw new InvalidDataException("Invalid AirFlash ICO frame.");
+                throw new InvalidDataException("Invalid Airplay ICO frame.");
             frames[i] = new(width, bytes.AsSpan((int)offset, (int)length).ToArray());
         }
         return frames.OrderBy(frame => frame.Size).ToArray();

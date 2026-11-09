@@ -6,7 +6,7 @@ namespace AirFlash.App.Services;
 
 public static class AppPaths
 {
-    public const string Name = "AirFlash";
+    public const string Name = "Airplay";
     private static Version AssemblyVersion => typeof(AppPaths).Assembly.GetName().Version!;
     private static string? InformationalVersion => typeof(AppPaths).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
     public static string Version => AssemblyVersion.ToString(3);
