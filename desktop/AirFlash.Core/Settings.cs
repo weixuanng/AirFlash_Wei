@@ -72,16 +72,23 @@ public sealed class AppSettings : ObservableObject
     /// </summary>
     public const int PreMixedInvariantSchemaVersion = 4;
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
-    private bool _StartAtLogin = false;
+    private bool _StartAtLogin = true;
     public bool StartAtLogin { get => _StartAtLogin; set => Set(ref _StartAtLogin, value); }
     private bool _MuteWhileStreaming = true;
     public bool MuteWhileStreaming { get => _MuteWhileStreaming; set => Set(ref _MuteWhileStreaming, value); }
     private bool _AutoConnectOnDiscover = false;
     public bool AutoConnectOnDiscover { get => _AutoConnectOnDiscover; set => Set(ref _AutoConnectOnDiscover, value); }
-    private bool _ForceReconnect = false;
+    private bool _ForceReconnect = true;
     public bool ForceReconnect { get => _ForceReconnect; set => Set(ref _ForceReconnect, value); }
-    private int _MaxReconnectAttempts = 5;
+    private int _MaxReconnectAttempts = 10;
     public int MaxReconnectAttempts { get => _MaxReconnectAttempts; set => Set(ref _MaxReconnectAttempts, value); }
+    // Connect to the last-used receiver on launch without a per-receiver opt-in.
+    private bool _AutoConnectLastReceiver = true;
+    public bool AutoConnectLastReceiver { get => _AutoConnectLastReceiver; set => Set(ref _AutoConnectLastReceiver, value); }
+    // After another device takes the speaker, wait and reconnect automatically
+    // once it is free again instead of requiring an explicit Reconnect.
+    private bool _ResumeAfterTakeover = true;
+    public bool ResumeAfterTakeover { get => _ResumeAfterTakeover; set => Set(ref _ResumeAfterTakeover, value); }
     // Retired layout preferences always use the compact panel defaults.
     public bool ShowWiderVolume { get => false; set { } }
     public bool ShowStreamingModes { get => true; set { } }
@@ -192,7 +199,8 @@ public sealed class AppSettings : ObservableObject
         SchemaVersion = source.SchemaVersion;
         StartAtLogin = source.StartAtLogin; MuteWhileStreaming = source.MuteWhileStreaming;
         AutoConnectOnDiscover = source.AutoConnectOnDiscover; ForceReconnect = source.ForceReconnect;
-        MaxReconnectAttempts = source.MaxReconnectAttempts; UiLanguage = source.UiLanguage; Theme = source.Theme;
+        MaxReconnectAttempts = source.MaxReconnectAttempts; AutoConnectLastReceiver = source.AutoConnectLastReceiver;
+        ResumeAfterTakeover = source.ResumeAfterTakeover; UiLanguage = source.UiLanguage; Theme = source.Theme;
         DiscoveryInterfaceId = source.DiscoveryInterfaceId;
         Equalizer.CopyFrom(source.Equalizer);
         LatencyMode = source.LatencyMode; CustomBufferMs = source.CustomBufferMs; ForceLatency = source.ForceLatency;

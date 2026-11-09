@@ -113,7 +113,8 @@ public sealed class IpcFailureTests
         await using var controller = new SessionController(factory, audio, timing: Timing);
         var streaming = Signal(); var preempted = Signal();
         controller.Changed += snapshot => { if (snapshot.State == PlaybackState.Streaming) streaming.TrySetResult(); if (snapshot.State == PlaybackState.Preempted) preempted.TrySetResult(); };
-        await controller.StartAsync(Receiver(), Settings());
+        var settings = Settings(); settings.ResumeAfterTakeover = false; // manual-recovery path
+        await controller.StartAsync(Receiver(), settings);
         await connection.Starting.Task.WaitAsync(Limit);
         connection.Current("streaming");
         await streaming.Task.WaitAsync(Limit);
@@ -135,7 +136,8 @@ public sealed class IpcFailureTests
         await using var controller = new SessionController(factory, audio, timing: Timing);
         var preempted = Signal();
         controller.Changed += snapshot => { if (snapshot.State == PlaybackState.Preempted) preempted.TrySetResult(); };
-        await controller.StartAsync(Receiver(), Settings());
+        var settings = Settings(); settings.ResumeAfterTakeover = false; // manual-recovery path
+        await controller.StartAsync(Receiver(), settings);
         await connection.Starting.Task.WaitAsync(Limit);
         connection.Current("error", new { code = "preempted", channel = "control", host = "192.0.2.10", retryable = false, reason = "limit", message = "Another controller keeps taking over this receiver" });
         await preempted.Task.WaitAsync(Limit);
