@@ -33,6 +33,92 @@
         </Setter.Value>
       </Setter>
     </Style>
+    <!-- The panel's one main control: Play on the last used speaker, or Stop. -->
+    <Style x:Key="PrimaryButton" TargetType="Button">
+      <Setter Property="Height" Value="40"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <!-- The template draws its own focus ring. -->
+      <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}"/>
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Grid x:Name="Chrome" RenderTransformOrigin="0.5,0.5">
+              <Grid.RenderTransform><ScaleTransform/></Grid.RenderTransform>
+              <Border x:Name="Fill" Background="{TemplateBinding Background}" CornerRadius="20"/>
+              <Border x:Name="Ring" BorderBrush="{DynamicResource TextBrush}" BorderThickness="2" CornerRadius="22" Margin="-3" Visibility="Collapsed"/>
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Fill" Property="Opacity" Value="0.9"/>
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True">
+                <Trigger.EnterActions>
+                  <BeginStoryboard>
+                    <Storyboard>
+                      <DoubleAnimation Storyboard.TargetName="Chrome" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="0.97" Duration="0:0:0.12"><DoubleAnimation.EasingFunction><QuinticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction></DoubleAnimation>
+                      <DoubleAnimation Storyboard.TargetName="Chrome" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="0.97" Duration="0:0:0.12"><DoubleAnimation.EasingFunction><QuinticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction></DoubleAnimation>
+                    </Storyboard>
+                  </BeginStoryboard>
+                </Trigger.EnterActions>
+                <Trigger.ExitActions>
+                  <BeginStoryboard>
+                    <Storyboard>
+                      <DoubleAnimation Storyboard.TargetName="Chrome" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="1" Duration="0:0:0.5"><DoubleAnimation.EasingFunction><QuinticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction></DoubleAnimation>
+                      <DoubleAnimation Storyboard.TargetName="Chrome" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="1" Duration="0:0:0.5"><DoubleAnimation.EasingFunction><QuinticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction></DoubleAnimation>
+                    </Storyboard>
+                  </BeginStoryboard>
+                </Trigger.ExitActions>
+              </Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter TargetName="Ring" Property="Visibility" Value="Visible"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="Chrome" Property="Opacity" Value="0.4"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <!-- Quiet text disclosure for settings most people never need. -->
+    <Style x:Key="DisclosureToggle" TargetType="ToggleButton">
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Foreground" Value="{DynamicResource MutedBrush}"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ToggleButton">
+            <Border x:Name="Box" Background="Transparent" CornerRadius="6" Padding="2,4">
+              <StackPanel Orientation="Horizontal">
+                <Path x:Name="Chevron" Data="M 0,0 L 4,4 L 0,8" Stroke="{TemplateBinding Foreground}" StrokeThickness="1.4" VerticalAlignment="Center" Margin="0,0,7,0" RenderTransformOrigin="0.5,0.5">
+                  <Path.RenderTransform><RotateTransform/></Path.RenderTransform>
+                </Path>
+                <ContentPresenter VerticalAlignment="Center"/>
+              </StackPanel>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsChecked" Value="True">
+                <Trigger.EnterActions>
+                  <BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="Chevron" Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)" To="90" Duration="0:0:0.5"><DoubleAnimation.EasingFunction><QuinticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction></DoubleAnimation></Storyboard></BeginStoryboard>
+                </Trigger.EnterActions>
+                <Trigger.ExitActions>
+                  <BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="Chevron" Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)" To="0" Duration="0:0:0.5"><DoubleAnimation.EasingFunction><QuinticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction></DoubleAnimation></Storyboard></BeginStoryboard>
+                </Trigger.ExitActions>
+              </Trigger>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+              </Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter TargetName="Box" Property="Background" Value="{DynamicResource TintBrush}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
   </Window.Resources>
   <Border BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="8" Padding="16" Background="{DynamicResource CanvasBrush}">
     <Grid Grid.IsSharedSizeScope="True">
@@ -91,7 +177,7 @@
               <TextBlock Text="{loc:Text 'Connect your PC and HomePod to the same network,&#10;or add a receiver in settings.'}" TextAlignment="Center" Style="{StaticResource Hint}" Margin="0,8,0,0"/>
             </StackPanel>
           </Border>
-          <ItemsControl ItemsSource="{Binding Receivers}">
+          <ItemsControl ItemsSource="{Binding Receivers}" loc:Motion.Stagger="True">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
                 <Border Padding="12" Margin="0,0,0,10" CornerRadius="10" BorderThickness="1">
@@ -206,6 +292,23 @@
         </StackPanel>
       </ScrollViewer>
       <StackPanel Grid.Row="3">
+        <Border Padding="12" Margin="0,0,0,10" CornerRadius="10" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" Visibility="{Binding Settings.ShowMasterControl, Converter={StaticResource BoolVisibility}}">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" SharedSizeGroup="VolumeLabel"/>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="40"/>
+              <ColumnDefinition Width="Auto" SharedSizeGroup="VolumeMute"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="{loc:Text 'Master volume'}" VerticalAlignment="Center" Margin="0,0,8,0" FontWeight="SemiBold"/>
+            <Slider Style="{StaticResource VolumeSlider}" Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True" Value="{Binding MasterVolume, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" AutomationProperties.Name="{loc:Text 'Master volume'}" PreviewMouseLeftButtonDown="OnSliderPreviewMouseLeftButtonDown"/>
+            <TextBlock Grid.Column="2" Text="{Binding MasterVolume, StringFormat={}{0}%}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+            <Button Grid.Column="3" Style="{StaticResource VolumeMuteButton}" Content="{Binding MuteLabel}" Command="{Binding MuteCommand}" AutomationProperties.Name="{Binding MuteLabel}"/>
+          </Grid>
+        </Border>
+        <!-- Latency lives behind Advanced; the defaults (Normal · 200 ms) suit most listening. -->
+        <ToggleButton x:Name="AdvancedToggle" Style="{StaticResource DisclosureToggle}" Content="{loc:Text 'Advanced'}" FontSize="12" HorizontalAlignment="Left" Margin="0,0,0,8" AutomationProperties.Name="{loc:Text 'Advanced'}" Visibility="{Binding Settings.ShowStreamingModes, Converter={StaticResource BoolVisibility}}"/>
+        <StackPanel x:Name="AdvancedPanel" Visibility="{Binding IsChecked, ElementName=AdvancedToggle, Converter={StaticResource BoolVisibility}}">
         <Grid Margin="2,4,2,14" Visibility="{Binding Settings.ShowStreamingModes, Converter={StaticResource BoolVisibility}}">
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*"/>
@@ -223,22 +326,30 @@
           </Button>
         </Grid>
         <TextBlock Text="{Binding GlobalLatencyHint}" Style="{StaticResource Hint}" Margin="2,0,2,12" Visibility="{Binding GlobalLatencyHint, Converter={StaticResource NonEmpty}}"/>
-        <Border Padding="12" Margin="0,0,0,10" CornerRadius="10" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" Visibility="{Binding Settings.ShowMasterControl, Converter={StaticResource BoolVisibility}}">
-          <Grid>
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="Auto" SharedSizeGroup="VolumeLabel"/>
-              <ColumnDefinition Width="*"/>
-              <ColumnDefinition Width="40"/>
-              <ColumnDefinition Width="Auto" SharedSizeGroup="VolumeMute"/>
-            </Grid.ColumnDefinitions>
-            <TextBlock Text="{loc:Text 'Master volume'}" VerticalAlignment="Center" Margin="0,0,8,0" FontWeight="SemiBold"/>
-            <Slider Style="{StaticResource VolumeSlider}" Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True" Value="{Binding MasterVolume, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" AutomationProperties.Name="{loc:Text 'Master volume'}" PreviewMouseLeftButtonDown="OnSliderPreviewMouseLeftButtonDown"/>
-            <TextBlock Grid.Column="2" Text="{Binding MasterVolume, StringFormat={}{0}%}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
-            <Button Grid.Column="3" Style="{StaticResource VolumeMuteButton}" Content="{Binding MuteLabel}" Command="{Binding MuteCommand}" AutomationProperties.Name="{Binding MuteLabel}"/>
-          </Grid>
-        </Border>
+        </StackPanel>
       </StackPanel>
       <StackPanel Grid.Row="4" Margin="2,4,2,0">
+        <Button Style="{StaticResource PrimaryButton}" Command="{Binding PrimaryCommand}" ToolTip="{Binding PrimaryLabel}" AutomationProperties.Name="{Binding PrimaryLabel}" HorizontalAlignment="Stretch" Margin="0,2,0,14">
+          <StackPanel Orientation="Horizontal">
+            <Viewbox Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
+              <Grid Width="24" Height="24">
+                <Path x:Name="PrimaryIcon" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}">
+                  <Path.Style>
+                    <Style TargetType="Path">
+                      <Setter Property="Data" Value="{StaticResource PlayIconGeometry}"/>
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding PrimaryIsStop}" Value="True">
+                          <Setter Property="Data" Value="{StaticResource StopIconGeometry}"/>
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </Path.Style>
+                </Path>
+              </Grid>
+            </Viewbox>
+            <TextBlock Text="{Binding PrimaryLabel}" VerticalAlignment="Center" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"/>
+          </StackPanel>
+        </Button>
         <DockPanel>
           <Ellipse Width="6" Height="6" Fill="{DynamicResource AccentBrush}" Margin="0,0,7,0"/>
           <TextBlock Text="{Binding StatusTitle}" FontWeight="SemiBold" FontSize="12"/>
