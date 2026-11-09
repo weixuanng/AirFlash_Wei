@@ -56,7 +56,10 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
     public int MasterVolume { get => _settings.MasterVolume; set { if (_closing || _resetting) return; value = Math.Clamp(value, 0, 100); if (value == _settings.MasterVolume) return; _settings.MasterVolume = value; VolumeChanged(); Notify(); } }
     public bool Muted => Session.Muted;
     public string MuteLabel => Muted ? L.Get("Unmute") : L.Get("Mute");
-    public string StatusTitle => IsStopping ? L.Get("Disconnecting…") : Session.NeedsCleanup ? L.Get("Connection error") : _snapshot.State switch { PlaybackState.Connecting => L.Get("Connecting"), PlaybackState.Streaming => L.Get("Playing"), PlaybackState.Standby => L.Get("Standby"), PlaybackState.Pairing => L.Get("Pairing"), PlaybackState.Error => L.Get("Connection error"), PlaybackState.Preempted => L.Get("Taken over by another device"), _ => L.Get("Ready") };
+    public string StatusTitle => IsStopping ? L.Get("Disconnecting…") : Session.NeedsCleanup ? L.Get("Connection error") : _snapshot.State switch { PlaybackState.Connecting => L.Get("Connecting"), PlaybackState.Streaming => L.Get("Playing"), PlaybackState.Standby => L.Get("Standby"), PlaybackState.Pairing => L.Get("Pairing"), PlaybackState.Error => L.Get("Connection error"), PlaybackState.Preempted => Session.IsYielding ? (Session.YieldedToOtherDevice ? L.Get("Playing on another device") : L.Get("Waiting for the speaker")) : L.Get("Taken over by another device"), _ => L.Get("Ready") };
+    /// <summary>The session owns a receiver: playing, connecting, or quietly
+    /// waiting for it after another device took it over.</summary>
+    public bool SessionHeld => _snapshot.IsActive || Session.IsYielding;
     public string StatusDetail => IsStopping ? L.Get("Stopping playback and disconnecting…") : Session.NeedsCleanup ? L.Get("The audio engine could not stop. Try disconnecting again.") : _snapshot.Message.Length > 0 ? _snapshot.Message : _snapshot.IsActive
         ? L.Format("{0} · target {1} ms", _snapshot.Receiver?.Name, _snapshot.TargetLatency)
             + (_snapshot.PendingLatency is { } target ? " · " + L.Format("Adjusting to {0} ms…", target) : "")
@@ -121,7 +124,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
         : Notice;
     /// <summary>The receiver now belongs to another controller. Reconnecting is a
     /// deliberate user action, never the automatic transport retry.</summary>
-    public bool CanReconnect => !_closing && !IsStopping && !Session.NeedsCleanup && Session.RequiresManualReconnect && _snapshot.Receiver is not null;
+    public bool CanReconnect => !_closing && !IsStopping && !Session.NeedsCleanup && (Session.RequiresManualReconnect || Session.IsYielding) && _snapshot.Receiver is not null;
     public string EngineVersion { get; set; } = L.Get("Unknown");
     public bool EngineReady => _engine is null || _engine.State == EngineAvailability.Ready;
     public bool EngineFailed => _engine?.State == EngineAvailability.Failed;
@@ -138,6 +141,18 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
     public AsyncCommand StopCommand { get; }
     public AsyncCommand ReconnectCommand { get; }
     public AsyncCommand MuteCommand { get; }
+    /// <summary>The panel's single main control: Stop while a session is held (or
+    /// needs cleanup); otherwise Play on the last used speaker, falling back to
+    /// the first playable one.</summary>
+    public AsyncCommand PrimaryCommand { get; }
+    public bool PrimaryIsStop => SessionHeld || Session.NeedsCleanup;
+    public string PrimaryLabel => IsStopping ? L.Get("Disconnecting…") : PrimaryIsStop ? L.Get("Stop") : L.Get("Play");
+    private ReceiverViewModel? PrimaryTarget => Receivers.FirstOrDefault(r => r.Receiver.Id == _settings.LastReceiverId && r.CanPlay) ?? Receivers.FirstOrDefault(r => r.CanPlay);
+    private void RefreshPrimary()
+    {
+        Notify(nameof(PrimaryIsStop)); Notify(nameof(PrimaryLabel));
+        PrimaryCommand.Refresh();
+    }
     public event Action? SettingsChanged;
     public event Action? CatalogChanged;
     public AppViewModel(ISettingsStore store, IDiscoveryService discovery, IAutostart autostart, IAudioService audio, IEngineFactory factory, Dispatcher dispatcher, EngineInitialization? engine = null, IApplicationCatalog? applications = null, IReceiverCapabilityCatalog? receiverCapabilities = null, IRestartService? restart = null)
@@ -195,8 +210,10 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
             _discoverySearchTimer!.Stop(); _searchSettled = true; Notify(nameof(DiscoveryEmptyTitle));
         }, dispatcher);
         _discoverySearchTimer.Stop();
-        StopCommand = new(() => StopAsync(), ShowError, () => !IsStopping && (_snapshot.IsActive || Session.NeedsCleanup));
-        ReconnectCommand = new(() => _snapshot.Receiver is { } receiver ? ToggleAsync(receiver) : Task.CompletedTask, ShowError, () => CanReconnect);
+        StopCommand = new(() => StopAsync(), ShowError, () => !IsStopping && (SessionHeld || Session.NeedsCleanup));
+        ReconnectCommand = new(() => _snapshot.Receiver is { } receiver ? ToggleAsync(receiver, SessionStartIntent.Manual, reconnect: true) : Task.CompletedTask, ShowError, () => CanReconnect);
+        PrimaryCommand = new(() => PrimaryIsStop ? StopAsync() : PrimaryTarget is { } target ? ToggleAsync(target.Receiver) : Task.CompletedTask, ShowError,
+            () => PrimaryIsStop ? StopCommand.CanExecute(null) : !IsStopping && PrimaryTarget is not null);
         MuteCommand = new(async () => { await Session.SetMutedAsync(!Session.Muted); Notify(nameof(Muted)); Notify(nameof(MuteLabel)); }, ShowError);
         MergeManualReceivers();
         RefreshLatencyChoices();
@@ -223,7 +240,8 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
         finally { _settingsGate.Release(); }
         if (_closing) return;
         _started = true;
-        _startupDiscovery = _settings.AutoConnectOnDiscover || _settings.Receivers.Values.Any(o => o.AutoConnect == true && !o.Hidden);
+        _startupDiscovery = _settings.AutoConnectOnDiscover || _settings.Receivers.Values.Any(o => o.AutoConnect == true && !o.Hidden)
+            || _settings.AutoConnectLastReceiver && _settings.LastReceiverId is { Length: > 0 } last && _settings.ReadOptions(last).AutoConnect != false && !_settings.ReadOptions(last).Hidden;
         if (_startupDiscovery) _startupDiscoveryTimer.Start();
         UpdateDiscoveryDemand();
         RefreshReceivers(); ScheduleAutoConnect();
@@ -250,6 +268,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
         Notify(nameof(EngineReady)); Notify(nameof(EngineFailed)); Notify(nameof(EngineMessage));
         RetryEngineCommand.Refresh();
         foreach (var row in Receivers) row.Refresh();
+        RefreshPrimary();
         CatalogChanged?.Invoke();
         if (EngineReady) ScheduleAutoConnect();
     });
@@ -403,10 +422,12 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
     private void RefreshReceivers()
     {
         var active = Session.Snapshot;
+        // A receiver the session is waiting on (yielding) stays listed like an active one.
+        var held = active.IsActive || Session.IsYielding;
         IEnumerable<Receiver> catalog = AllReceivers;
-        if (active.IsActive && active.Receiver is { } current && catalog.All(r => r.Id != current.Id))
+        if (held && active.Receiver is { } current && catalog.All(r => r.Id != current.Id))
             catalog = catalog.Append(current with { Online = false });
-        var visible = catalog.Where(r => (r.Online || active.IsActive && r.Id == active.Receiver?.Id) && !_settings.ReadOptions(r.Id).Hidden).ToList();
+        var visible = catalog.Where(r => (r.Online || held && r.Id == active.Receiver?.Id) && !_settings.ReadOptions(r.Id).Hidden).ToList();
         foreach (var row in Receivers.Where(row => visible.All(r => r.Id != row.Receiver.Id)).ToArray()) Receivers.Remove(row);
         for (var i = 0; i < visible.Count; i++)
         {
@@ -416,6 +437,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
             row.Refresh();
         }
         Notify(nameof(AllReceivers));
+        RefreshPrimary();
     }
     private void SessionChanged(SessionSnapshot snapshot) => _dispatcher.BeginInvoke(() => ApplySessionSnapshot(snapshot));
     private void ApplySessionSnapshot(SessionSnapshot snapshot)
@@ -440,6 +462,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
             UpdateDiscoveryDemand();
         }
         foreach (var row in Receivers) row.Refresh();
+        RefreshPrimary();
         if (_monitorVisible) RefreshMonitor();
     }
     public void SetMonitorVisible(bool visible)
@@ -471,10 +494,11 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
         }
     }
     public Task ToggleAsync(Receiver receiver) => ToggleAsync(receiver, SessionStartIntent.Manual);
-    private async Task ToggleAsync(Receiver receiver, SessionStartIntent startIntent)
+    private async Task ToggleAsync(Receiver receiver, SessionStartIntent startIntent, bool reconnect = false)
     {
         if (_closing || IsStopping) return;
-        if (_snapshot.IsActive && _snapshot.Receiver?.Id == receiver.Id) { await StopAsync(); return; }
+        // Reconnect claims the receiver back; a plain toggle on the held receiver stops.
+        if (!reconnect && SessionHeld && _snapshot.Receiver?.Id == receiver.Id) { await StopAsync(); return; }
         if (_closing || _resetting || !EngineReady || Session.NeedsCleanup) return;
         var group = AllReceivers.FirstOrDefault(r => r.IsGroup && !r.IsSoftwareGroup && r.Members.Any(m => m.Address == receiver.Address));
         if (group is not null) receiver = group;
@@ -525,6 +549,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
         Notify(nameof(IsStopping)); Notify(nameof(StatusTitle)); Notify(nameof(StatusDetail)); Notify(nameof(PanelStatusDetail)); Notify(nameof(CanReconnect));
         RefreshGlobalLatency(); StopCommand.Refresh(); ReconnectCommand.Refresh();
         foreach (var row in Receivers) row.Refresh();
+        RefreshPrimary();
     }
     private void ScheduleAutoConnect() { _autoTimer.Stop(); if (!_closing && !_resetting) _autoTimer.Start(); }
     private async Task SaveSettingsAsync(AppSettings settings, bool? identityBackup = null)
@@ -537,8 +562,12 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
     }
     internal async Task TryAutoConnectAsync()
     {
-        if (_closing || _resetting || IsStopping || Session.NeedsCleanup || Session.RequiresManualReconnect || !EngineReady || _autoSuppressed || Session.Snapshot.IsActive) return;
-        var eligible = AllReceivers.Where(r => r.Online && r.Complete && !_settings.ReadOptions(r.Id).Hidden && (_settings.ReadOptions(r.Id).AutoConnect ?? _settings.AutoConnectOnDiscover));
+        // While yielding, the session itself resumes once the receiver is free.
+        if (_closing || _resetting || IsStopping || Session.NeedsCleanup || Session.RequiresManualReconnect || Session.IsYielding || !EngineReady || _autoSuppressed || Session.Snapshot.IsActive) return;
+        // An explicit per-receiver choice wins; otherwise the last-used receiver
+        // (AutoConnectLastReceiver) or every receiver (AutoConnectOnDiscover).
+        var eligible = AllReceivers.Where(r => r.Online && r.Complete && !_settings.ReadOptions(r.Id).Hidden
+            && (_settings.ReadOptions(r.Id).AutoConnect ?? (_settings.AutoConnectOnDiscover || _settings.AutoConnectLastReceiver && r.Id == _settings.LastReceiverId)));
         var receiver = eligible.OrderByDescending(r => r.Id == _settings.LastReceiverId).FirstOrDefault();
         if (receiver is not null && !_autoAttempted.Contains(receiver.Id)) await ToggleAsync(receiver, SessionStartIntent.Automatic);
     }
@@ -758,7 +787,7 @@ public sealed class ReceiverViewModel : ObservableObject
     public bool CanMute => CanSetVolume && (!Muted || DeviceVolume.LastNonZero is > 0);
     public bool Muted => DeviceVolume.Display == 0;
     public string MuteLabel => Muted ? L.Get("Unmute") : L.Get("Mute");
-    public bool Active => _app.Snapshot.IsActive && _app.Snapshot.Receiver?.Id == Receiver.Id;
+    public bool Active => _app.SessionHeld && _app.Snapshot.Receiver?.Id == Receiver.Id;
     public bool IsStopping => _app.IsStopping && _app.Snapshot.Receiver?.Id == Receiver.Id;
     public bool NeedsDisconnect => Active || _app.Session.NeedsCleanup && _app.Snapshot.Receiver?.Id == Receiver.Id;
     public System.Windows.Input.ICommand PlaybackCommand => NeedsDisconnect ? _app.StopCommand : ToggleCommand;
