@@ -164,10 +164,9 @@ pub fn announce(clock: u64, seq: u16, ns: u64) -> Vec<u8> {
     p[68..].copy_from_slice(&clock.to_be_bytes());
     p
 }
-/// An Announce whose only job is to make a silent receiver clock rerun its
-/// master selection. The wire shape follows the sequence nqptp sends to Apple
-/// receivers: no path trace, announce interval -2, UTC offset 37.
-pub fn wake_announce(clock: u64, seq: u16, priority1: u8, priority2: u8) -> Vec<u8> {
+/// A bare 64-byte Announce with the given priorities: no path trace, announce
+/// interval -2, UTC offset 37. This is the shape nqptp sends to Apple receivers.
+pub fn plain_announce(clock: u64, seq: u16, priority1: u8, priority2: u8) -> Vec<u8> {
     let mut p = header(11, 64, clock, seq, 0x0408, -2);
     p[32] = 5;
     p[44..46].copy_from_slice(&37u16.to_be_bytes());
@@ -178,7 +177,7 @@ pub fn wake_announce(clock: u64, seq: u16, priority1: u8, priority2: u8) -> Vec<
     p[63] = 0xa0;
     p
 }
-/// Priorities for the two wake Announces: first one step better than the
+/// Priorities for the wake Announces: first one step better than the
 /// receiver's own priority1, then one step worse, so the receiver negotiates
 /// and is immediately left as the best clock.
 fn wake_priorities(remote: BmcaDataset) -> ((u8, u8), (u8, u8)) {
@@ -193,6 +192,22 @@ fn wake_priorities(remote: BmcaDataset) -> ((u8, u8), (u8, u8)) {
         250
     };
     (better, (worse, remote.priority2))
+}
+/// The Signaling a Mac sends when it joins as a clock that will follow: an
+/// 802.1AS message-interval request (Sync 8 per second, Announce 4 per second)
+/// and the two Apple extension TLVs that accompany it.
+pub fn follower_signaling(clock: u64, seq: u16) -> Vec<u8> {
+    let mut p = header(12, 122, clock, seq, 0x0408, -128);
+    p[32] = 5;
+    p[34..44].fill(0xff);
+    p[44..60].copy_from_slice(&[
+        0, 3, 0, 12, 0, 0x80, 0xc2, 0, 0, 2, 0xfd, 0xfd, 0xfe, 2, 0, 0,
+    ]);
+    p[60..76].copy_from_slice(&[0, 3, 0, 22, 0, 0x0d, 0x93, 0, 0, 1, 0, 3, 0, 0, 0, 0]);
+    p[76..82].copy_from_slice(&[0x27, 0x10, 0, 0, 0x27, 0x10]);
+    p[86..102].copy_from_slice(&[0, 3, 0, 32, 0, 0x0d, 0x93, 0, 0, 5, 0, 0x0f, 0, 0, 0, 0]);
+    p[102..108].copy_from_slice(&[0x27, 0x10, 0, 0, 0x27, 0x10]);
+    p
 }
 pub fn sync_pair(clock: u64, seq: u16, ns: u64) -> (Vec<u8>, Vec<u8>) {
     let mut sync = header(0, 44, clock, seq, 0x0608, -3);
@@ -267,21 +282,50 @@ struct PeerState {
 }
 /// A followed receiver can announce itself as grandmaster yet send no
 /// Sync/Follow_Up until another PTP port takes part in master selection.
-/// HomePod software 27.2 does this to a sender that stays silent.
+/// HomePod software 27.2 does this to a sender that stays silent. Two remedies
+/// from working implementations are used, in turn:
+///
+/// * the introduction a Mac sends when it joins as a clock that will follow
+///   (three Sync/Follow_Up pairs, two worse Announces, one Signaling);
+/// * nqptp's wake for a silent Apple clock (one better Announce, then worse ones).
 #[derive(Clone, Copy, Default)]
 struct WakeState {
+    activated: Option<Instant>,
     announces_without_sync: u32,
-    /// Sequences sent since the receiver last produced a complete Sync pair.
+    /// Announces in which the receiver named this engine's clock as grandmaster.
+    announces_naming_us: u64,
+    /// Escalations since the receiver last produced a complete Sync pair.
     attempts: u8,
-    total: u64,
+    wakes: u64,
+    introductions: u64,
     next: Option<Instant>,
-    /// The worse Announce that closes a sequence: when it is due and its priorities.
-    closing: Option<(Instant, u8, u8)>,
+    /// Worse Announces that close a wake: when the next is due, its priorities
+    /// and how many remain.
+    closing: Option<(Instant, u8, u8, u8)>,
+    /// The next introduction step and when it is due.
+    introduction: Option<(Instant, u8)>,
+    /// The receiver has delivered a usable clock; it is left alone from then on.
+    settled: bool,
+    /// Time from activation to the first complete pair, and the wakes and
+    /// introductions sent before it.
+    first_pair: Option<(Duration, u64, u64)>,
+}
+/// What the PTP loop should send for a followed peer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Nudge {
+    /// A bare Announce with these priorities.
+    Announce(u8, u8),
+    /// Introduction step 0-3, with the priority1 to announce.
+    Introduction(u8, u8),
 }
 const WAKE_AFTER_ANNOUNCES: u32 = 3;
-const WAKE_ATTEMPTS: u8 = 3;
+const WAKE_ESCALATIONS: u8 = 3;
 const WAKE_GAP: Duration = Duration::from_millis(150);
 const WAKE_RETRY: Duration = Duration::from_secs(2);
+const INTRODUCTION_STEP: Duration = Duration::from_millis(125);
+const INTRODUCTION_SETTLE: Duration = Duration::from_millis(1500);
+/// A Mac announces priority1 250, which loses to a HomePod's 248.
+const INTRODUCTION_PRIORITY1: u8 = 250;
 const SAMPLE_LIFETIME: Duration = Duration::from_secs(2);
 const MAX_PENDING_SYNCS: usize = 32;
 const SUBSCRIPTION_RETRY: Duration = Duration::from_millis(500);
@@ -346,9 +390,10 @@ const SAMPLE_BYTES: usize = 128;
 pub struct PacketSample(Vec<u8>);
 impl serde::Serialize for PacketSample {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use std::fmt::Write;
         let mut hex = String::with_capacity(self.0.len() * 2);
         for byte in &self.0 {
-            hex.push_str(&format!("{byte:02x}"));
+            let _ = write!(hex, "{byte:02x}");
         }
         serializer.serialize_str(&hex)
     }
@@ -393,9 +438,16 @@ pub struct PeerSnapshot {
     pub bmca_steps_removed: Option<u16>,
     /// True when the peer's dataset outranks ours (IEEE 1588 comparison order).
     pub better_master: bool,
-    /// Wake sequences sent to a receiver clock that announced without syncing.
+    /// Wakes and introductions sent to a receiver clock that announced without syncing.
     pub wake_attempts: u64,
+    pub introductions: u64,
     pub announces_without_sync: u32,
+    pub announces_naming_us: u64,
+    /// When the first complete Sync pair arrived after activation, and how
+    /// many wakes and introductions had been sent by then.
+    pub first_pair_ms: Option<u128>,
+    pub first_pair_after_wakes: Option<u64>,
+    pub first_pair_after_introductions: Option<u64>,
 }
 #[derive(Clone, Copy)]
 struct Subscription {
@@ -499,32 +551,73 @@ impl PeerState {
             "waiting_exchanges"
         }
     }
-    /// The next wake Announce to send, as (priority1, priority2), if one is due.
-    fn next_wake(&mut self, now: Instant) -> Option<(u8, u8)> {
+    /// SETPEERS has been accepted: timing traffic for this peer starts now.
+    fn begin_session(&mut self, local_address: IpAddr, now: Instant) {
+        self.active = true;
+        self.local_address = Some(local_address);
+        self.next_subscription = None;
+        // Introduce this clock at once; escalate only if Sync stays absent.
+        self.wake = WakeState {
+            activated: Some(now),
+            wakes: self.wake.wakes,
+            introductions: self.wake.introductions + u64::from(self.follow),
+            announces_naming_us: self.wake.announces_naming_us,
+            closing: self.wake.closing,
+            introduction: self.follow.then_some((now, 0)),
+            next: Some(now + INTRODUCTION_SETTLE),
+            ..Default::default()
+        };
+    }
+    /// The next thing to send to a followed receiver whose clock is silent.
+    fn nudge(&mut self, now: Instant) -> Option<Nudge> {
         if !self.follow || !self.active {
             return None;
         }
-        if let Some((due, priority1, priority2)) = self.wake.closing {
+        // A started wake is always closed, so the receiver is never left
+        // believing this engine is the better clock.
+        if let Some((due, priority1, priority2, remaining)) = self.wake.closing {
             if now < due {
                 return None;
             }
-            self.wake.closing = None;
-            return Some((priority1, priority2));
+            self.wake.closing =
+                (remaining > 1).then(|| (now + WAKE_GAP, priority1, priority2, remaining - 1));
+            return Some(Nudge::Announce(priority1, priority2));
+        }
+        if self.wake.settled {
+            self.wake.introduction = None;
+            return None;
+        }
+        let introduction_priority = match self.bmca {
+            Some(remote) if remote.priority1 >= INTRODUCTION_PRIORITY1 => 255,
+            _ => INTRODUCTION_PRIORITY1,
+        };
+        if let Some((due, step)) = self.wake.introduction {
+            if now < due {
+                return None;
+            }
+            self.wake.introduction = (step < 3).then(|| (now + INTRODUCTION_STEP, step + 1));
+            return Some(Nudge::Introduction(step, introduction_priority));
         }
         let remote = self.bmca?;
         if self.wake.announces_without_sync < WAKE_AFTER_ANNOUNCES
-            || self.wake.attempts >= WAKE_ATTEMPTS
+            || self.wake.attempts >= WAKE_ESCALATIONS
             || self.wake.next.is_some_and(|at| now < at)
         {
             return None;
         }
-        let (better, worse) = wake_priorities(remote);
         self.wake.attempts += 1;
-        self.wake.total += 1;
         self.wake.announces_without_sync = 0;
+        if self.wake.attempts == 2 {
+            self.wake.introductions += 1;
+            self.wake.introduction = Some((now + INTRODUCTION_STEP, 1));
+            self.wake.next = Some(now + INTRODUCTION_SETTLE);
+            return Some(Nudge::Introduction(0, introduction_priority));
+        }
+        let (better, worse) = wake_priorities(remote);
+        self.wake.wakes += 1;
         self.wake.next = Some(now + WAKE_RETRY);
-        self.wake.closing = Some((now + WAKE_GAP, worse.0, worse.1));
-        Some(better)
+        self.wake.closing = Some((now + WAKE_GAP, worse.0, worse.1, 2));
+        Some(Nudge::Announce(better.0, better.1))
     }
     fn subscription_due(&self, now: Instant) -> bool {
         self.next_subscription.is_none_or(|at| now >= at)
@@ -631,6 +724,13 @@ impl PeerState {
                     .map_or(sample, |old| old * 0.875 + sample * 0.125),
             );
             self.wake.attempts = 0;
+            if self.wake.first_pair.is_none() {
+                let since = self
+                    .wake
+                    .activated
+                    .map_or(Duration::ZERO, |start| at.saturating_duration_since(start));
+                self.wake.first_pair = Some((since, self.wake.wakes, self.wake.introductions));
+            }
             self.exchanged(at);
         }
     }
@@ -647,6 +747,9 @@ impl PeerState {
         }
         self.last = Some(now);
         self.exchanges += 1;
+        if self.follow && self.exchanges >= 3 {
+            self.wake.settled = true;
+        }
     }
     fn ready(&self, now: Instant) -> bool {
         self.exchanges >= 3
@@ -759,6 +862,13 @@ fn followed_packet(s: &mut PeerState, data: &[u8], local_ns: u64, now: Instant, 
     let source_port = u16::from_be_bytes(data[28..30].try_into().unwrap());
     if kind == 11 && data.len() >= 64 {
         let id = u64::from_be_bytes(data[53..61].try_into().unwrap());
+        if id == own_id {
+            // During a wake the receiver may briefly name this engine as
+            // grandmaster. That is not a clock to follow or a dataset to keep.
+            s.wake.announces_naming_us += 1;
+            s.wake.announces_without_sync = s.wake.announces_without_sync.saturating_add(1);
+            return;
+        }
         if s.clock_id != Some(id)
             || s.source_id != Some(source)
             || s.source_port != Some(source_port)
@@ -1029,13 +1139,7 @@ impl PtpMaster {
     /// requests afterwards even if the receiver ignored pre-session traffic.
     pub fn activate(&self, host: IpAddr, local_address: IpAddr) {
         if let Some(peer) = self.states.lock().unwrap().get_mut(&host) {
-            peer.active = true;
-            peer.local_address = Some(local_address);
-            peer.next_subscription = None;
-            peer.wake = WakeState {
-                total: peer.wake.total,
-                ..Default::default()
-            };
+            peer.begin_session(local_address, Instant::now());
         }
     }
     /// Wait for the receiver's Announce and decide the clock role, once, before
@@ -1121,8 +1225,13 @@ impl PtpMaster {
                 bmca_grandmaster: s.bmca.map(|b| b.grandmaster),
                 bmca_steps_removed: s.bmca.map(|b| b.steps_removed),
                 better_master: s.better_master,
-                wake_attempts: s.wake.total,
+                wake_attempts: s.wake.wakes,
+                introductions: s.wake.introductions,
                 announces_without_sync: s.wake.announces_without_sync,
+                announces_naming_us: s.wake.announces_naming_us,
+                first_pair_ms: s.wake.first_pair.map(|first| first.0.as_millis()),
+                first_pair_after_wakes: s.wake.first_pair.map(|first| first.1),
+                first_pair_after_introductions: s.wake.first_pair.map(|first| first.2),
             })
             .collect();
         result.sort_by_key(|s| s.host);
@@ -1312,17 +1421,45 @@ fn ptp_loop(
     let mut last_announce = Instant::now() - Duration::from_secs(2);
     let mut next_sync = Instant::now();
     let mut buf = [0u8; 2048];
-    let mut wake_seq = 0u16;
+    let mut nudge_seq = 0u16;
+    let followed: Vec<IpAddr> = {
+        let states = state.lock().unwrap();
+        peers
+            .iter()
+            .filter(|peer| states.get(*peer).is_some_and(|s| s.follow))
+            .copied()
+            .collect()
+    };
     while !stop.is_cancelled() {
         let now = Instant::now();
-        for peer in peers {
+        for peer in &followed {
             let mut states = state.lock().unwrap();
             let s = states.get_mut(peer).unwrap();
-            if let Some((priority1, priority2)) = s.next_wake(now) {
-                let packet = wake_announce(clock_id, wake_seq, priority1, priority2);
-                wake_seq = wake_seq.wrapping_add(1);
-                send_ptp(general, &packet, (*peer, 320).into(), s, "wake_announce");
+            let Some(nudge) = s.nudge(now) else {
+                continue;
+            };
+            let announce =
+                |priority1, priority2| plain_announce(clock_id, nudge_seq, priority1, priority2);
+            match nudge {
+                Nudge::Announce(priority1, priority2) => {
+                    let packet = announce(priority1, priority2);
+                    send_ptp(general, &packet, (*peer, 320).into(), s, "wake_announce");
+                }
+                Nudge::Introduction(3, _) => {
+                    let packet = follower_signaling(clock_id, nudge_seq);
+                    send_ptp(general, &packet, (*peer, 320).into(), s, "introduction");
+                }
+                Nudge::Introduction(step, priority1) => {
+                    let (sync, follow) = sync_pair(clock_id, nudge_seq, clock.now_ns());
+                    send_ptp(event, &sync, (*peer, 319).into(), s, "introduction");
+                    send_ptp(general, &follow, (*peer, 320).into(), s, "introduction");
+                    if step < 2 {
+                        let packet = announce(priority1, 128);
+                        send_ptp(general, &packet, (*peer, 320).into(), s, "introduction");
+                    }
+                }
             }
+            nudge_seq = nudge_seq.wrapping_add(1);
         }
         if now >= next_sync {
             for peer in peers {
@@ -1455,7 +1592,9 @@ fn ptp_loop(
                 if !s.active {
                     continue;
                 }
-                if kind == 11 {
+                // An Announce naming this engine is an echo of a wake, not a restart.
+                let names_us = kind == 11 && n >= 61 && buf[53..61] == clock_id.to_be_bytes();
+                if kind == 11 && !names_us {
                     note_announce_identity(s, &buf[..n], received_at);
                 }
                 if s.follow && [0, 8, 9, 11, 12].contains(&kind) {

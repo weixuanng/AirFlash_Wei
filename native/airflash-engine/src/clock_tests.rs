@@ -599,9 +599,37 @@ fn older_exchange_instants_cannot_refresh_or_inflate_readiness() {
     assert!(state.ready(start + Duration::from_millis(250)));
 }
 
+/// A followed peer as `PtpMaster::activate` leaves it, plus the receiver's
+/// first Announce (priority1 96, priority2 128, clock 8).
+fn introduced(now: Instant) -> PeerState {
+    let mut state = PeerState {
+        follow: true,
+        ..Default::default()
+    };
+    state.begin_session("127.0.0.1".parse().unwrap(), now);
+    followed_packet(&mut state, &announce(8, 0, 0), 0, now, 7);
+    state
+}
+fn announces(state: &mut PeerState, count: u16, now: Instant) {
+    for seq in 0..count {
+        followed_packet(state, &announce(8, 100 + seq, 0), 0, now, 7);
+    }
+}
+/// Step through the four introduction datagram groups starting at `from`.
+fn finish_introduction(state: &mut PeerState, from: Instant) {
+    for step in 0..4u8 {
+        let at = from + INTRODUCTION_STEP * u32::from(step);
+        assert_eq!(nudges(state, at), [Nudge::Introduction(step, 250)]);
+    }
+}
+/// Drain everything that is due at `now`.
+fn nudges(state: &mut PeerState, now: Instant) -> Vec<Nudge> {
+    std::iter::from_fn(|| state.nudge(now)).collect()
+}
+
 #[test]
-fn wake_announce_is_a_plain_announce_with_the_requested_priorities() {
-    let packet = wake_announce(7, 3, 247, 245);
+fn plain_announce_carries_the_requested_priorities() {
+    let packet = plain_announce(7, 3, 247, 245);
     assert_eq!(packet.len(), 64);
     assert_eq!(packet_rejection(&packet), None);
     assert_eq!(&packet[2..4], &64u16.to_be_bytes());
@@ -634,82 +662,184 @@ fn wake_priorities_step_around_the_receiver_and_stay_in_range() {
 }
 
 #[test]
-fn a_silent_announcing_receiver_is_woken_in_bounded_sequences() {
+fn follower_signaling_is_three_well_formed_organization_tlvs() {
+    let packet = follower_signaling(7, 9);
+    assert_eq!(packet.len(), 122);
+    assert_eq!(packet_rejection(&packet), None);
+    assert_eq!(packet[0] & 15, 12);
+    assert_eq!(&packet[34..44], &[0xff; 10]);
+    let mut at = 44;
+    let mut seen = Vec::new();
+    while at < packet.len() {
+        assert_eq!(&packet[at..at + 2], &[0, 3], "organization extension");
+        let length = usize::from(u16::from_be_bytes([packet[at + 2], packet[at + 3]]));
+        seen.push((packet[at + 4..at + 10].to_vec(), length));
+        at += 4 + length;
+    }
+    assert_eq!(at, packet.len(), "TLVs fill the datagram exactly");
+    assert_eq!(
+        seen,
+        vec![
+            (vec![0, 0x80, 0xc2, 0, 0, 2], 12),
+            (vec![0, 0x0d, 0x93, 0, 0, 1], 22),
+            (vec![0, 0x0d, 0x93, 0, 0, 5], 32),
+        ]
+    );
+    // Link delay -3, time sync -3 (8 per second), announce -2 (4 per second).
+    assert_eq!(&packet[54..58], &[0xfd, 0xfd, 0xfe, 2]);
+}
+
+#[test]
+fn a_silent_receiver_is_introduced_to_then_woken_within_a_fixed_budget() {
     let start = Instant::now();
-    let mut state = follower(start);
-    // `follower` delivered one Announce; two is still below the threshold.
-    followed_packet(&mut state, &announce(8, 1, 0), 0, start, 7);
-    assert_eq!(state.next_wake(start), None);
-    followed_packet(&mut state, &announce(8, 2, 0), 0, start, 7);
-    // The simulated receiver announces priority1 96, priority2 128.
-    assert_eq!(state.next_wake(start), Some((95, 128)));
-    assert_eq!(state.next_wake(start + Duration::from_millis(100)), None);
-    assert_eq!(state.next_wake(start + WAKE_GAP), Some((97, 128)));
-    // No second sequence before the retry time, even with fresh Announces.
-    for seq in 3..6u16 {
-        followed_packet(&mut state, &announce(8, seq, 0), 0, start, 7);
+    let mut state = introduced(start);
+    // The introduction starts at once and takes four steps 125 ms apart.
+    assert_eq!(nudges(&mut state, start), [Nudge::Introduction(0, 250)]);
+    for step in 1..4u8 {
+        let at = start + INTRODUCTION_STEP * u32::from(step);
+        assert_eq!(nudges(&mut state, at), [Nudge::Introduction(step, 250)]);
     }
-    assert_eq!(state.next_wake(start + Duration::from_secs(1)), None);
-    let mut at = start;
-    for attempt in 1..WAKE_ATTEMPTS {
-        at += WAKE_RETRY;
-        assert!(state.next_wake(at).is_some(), "attempt {attempt}");
-        assert!(state.next_wake(at + WAKE_GAP).is_some());
-        for seq in 0..3u16 {
-            followed_packet(&mut state, &announce(8, 10 + seq, 0), 0, at, 7);
-        }
+    announces(&mut state, 4, start);
+    assert_eq!(nudges(&mut state, start + Duration::from_secs(1)), []);
+    // Still silent: one better Announce, then two worse ones 150 ms apart.
+    let mut at = start + INTRODUCTION_SETTLE;
+    assert_eq!(nudges(&mut state, at), [Nudge::Announce(95, 128)]);
+    assert_eq!(nudges(&mut state, at + Duration::from_millis(100)), []);
+    assert_eq!(
+        nudges(&mut state, at + WAKE_GAP),
+        [Nudge::Announce(97, 128)]
+    );
+    assert_eq!(
+        nudges(&mut state, at + WAKE_GAP * 2),
+        [Nudge::Announce(97, 128)]
+    );
+    announces(&mut state, 4, at);
+    assert_eq!(nudges(&mut state, at + Duration::from_secs(1)), []);
+    // Then the introduction again, then a last wake.
+    at += WAKE_RETRY;
+    assert_eq!(nudges(&mut state, at), [Nudge::Introduction(0, 250)]);
+    for step in 1..4u8 {
+        let due = at + INTRODUCTION_STEP * u32::from(step);
+        assert_eq!(nudges(&mut state, due), [Nudge::Introduction(step, 250)]);
     }
+    announces(&mut state, 4, at);
+    at += INTRODUCTION_SETTLE;
+    assert_eq!(nudges(&mut state, at), [Nudge::Announce(95, 128)]);
+    assert_eq!(nudges(&mut state, at + WAKE_GAP).len(), 1);
+    assert_eq!(nudges(&mut state, at + WAKE_GAP * 2).len(), 1);
     // The budget is spent: a receiver that never syncs is left alone.
-    assert_eq!(state.next_wake(at + WAKE_RETRY * 4), None);
-    assert_eq!(state.wake.total, u64::from(WAKE_ATTEMPTS));
+    announces(&mut state, 40, at);
+    assert_eq!(nudges(&mut state, at + Duration::from_secs(60)), []);
+    assert_eq!((state.wake.wakes, state.wake.introductions), (2, 2));
 }
 
 #[test]
-fn sync_traffic_cancels_a_wake_and_a_complete_pair_restores_the_budget() {
+fn a_settled_clock_is_never_nudged_again() {
     let start = Instant::now();
-    let mut state = follower(start);
-    followed_packet(&mut state, &announce(8, 1, 0), 0, start, 7);
-    followed_packet(&mut state, &announce(8, 2, 0), 0, start, 7);
-    let (sync, follow) = sync_pair(8, 0, 6_000_000_000);
-    followed_packet(&mut state, &sync, 1_000_000_000, start, 7);
-    assert_eq!(state.wake.announces_without_sync, 0);
-    assert_eq!(state.next_wake(start), None, "a syncing clock is not woken");
-    state.wake.attempts = WAKE_ATTEMPTS;
-    followed_packet(&mut state, &follow, 1_000_100_000, start, 7);
-    assert_eq!(state.wake.attempts, 0);
-    // A sender-role peer and an inactive follower are never woken.
-    let mut sender = PeerState {
-        active: true,
-        bmca: Some(BmcaDataset::local(8)),
-        wake: WakeState {
-            announces_without_sync: 9,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    assert_eq!(sender.next_wake(start), None);
-    sender.follow = true;
-    sender.active = false;
-    assert_eq!(sender.next_wake(start), None);
-}
-
-#[test]
-fn wake_state_survives_the_association_reset_of_a_restarted_receiver() {
-    let start = Instant::now();
-    let mut state = follower(start);
-    for seq in 1..3u16 {
-        followed_packet(&mut state, &announce(8, seq, 0), 0, start, 7);
+    let mut state = introduced(start);
+    assert_eq!(nudges(&mut state, start).len(), 1);
+    for seq in 0..3u16 {
+        let at = start + Duration::from_millis(u64::from(seq) * 125);
+        let local = 1_000_000_000 + u64::from(seq) * 125_000_000;
+        let (sync, follow) = sync_pair(8, seq, local + 5_000_000_000);
+        followed_packet(&mut state, &sync, local, at, 7);
+        followed_packet(&mut state, &follow, local + 5_000, at, 7);
     }
-    assert!(state.next_wake(start).is_some());
-    // The receiver restarts its PTP port under a new clock identity.
-    followed_packet(&mut state, &announce(9, 0, 0), 0, start, 7);
-    assert_eq!(state.wake.total, 1);
-    assert!(state.wake.closing.is_some());
-    assert_eq!(state.wake.attempts, 1);
+    assert!(state.wake.settled);
+    assert_eq!(
+        state.wake.first_pair.map(|first| (first.1, first.2)),
+        Some((0, 1))
+    );
+    // The rest of the introduction is dropped once the clock is usable.
+    assert_eq!(nudges(&mut state, start + Duration::from_millis(400)), []);
+    // A 650 ms Sync gap under 4 Hz Announces, while the clock is still ready.
+    let gap = start + Duration::from_millis(900);
+    announces(&mut state, 3, gap);
+    assert!(state.ready(gap));
+    assert_eq!(nudges(&mut state, gap), []);
+    // Sync at 1 Hz against Announce at 4 Hz, for twenty seconds.
+    for second in 2..22u16 {
+        let at = start + Duration::from_secs(u64::from(second));
+        announces(&mut state, 4, at);
+        assert_eq!(nudges(&mut state, at), [], "second {second}");
+        let local = 1_000_000_000 + u64::from(second) * 1_000_000_000;
+        let (sync, follow) = sync_pair(8, 10 + second, local + 5_000_000_000);
+        followed_packet(&mut state, &sync, local, at, 7);
+        followed_packet(&mut state, &follow, local + 5_000, at, 7);
+    }
+    assert_eq!((state.wake.wakes, state.wake.introductions), (0, 1));
 }
 
 #[test]
-fn loop_wakes_a_silent_receiver_then_follows_its_sync() {
+fn sync_traffic_holds_back_a_wake_and_a_single_pair_restores_the_budget() {
+    let start = Instant::now();
+    let mut state = introduced(start);
+    let after = start + INTRODUCTION_SETTLE;
+    finish_introduction(&mut state, start);
+    announces(&mut state, 3, after);
+    let (sync, follow) = sync_pair(8, 0, 6_000_000_000);
+    followed_packet(&mut state, &sync, 1_000_000_000, after, 7);
+    assert_eq!(state.wake.announces_without_sync, 0);
+    assert_eq!(
+        nudges(&mut state, after),
+        [],
+        "a syncing clock is not woken"
+    );
+    state.wake.attempts = WAKE_ESCALATIONS;
+    followed_packet(&mut state, &follow, 1_000_100_000, after, 7);
+    assert_eq!(state.wake.attempts, 0);
+    assert!(!state.wake.settled, "one pair is not yet a usable clock");
+    // A sender-role peer and an inactive follower are never nudged.
+    let mut sender = PeerState::default();
+    sender.begin_session("127.0.0.1".parse().unwrap(), start);
+    sender.bmca = Some(BmcaDataset::local(8));
+    sender.wake.announces_without_sync = 9;
+    assert_eq!(nudges(&mut sender, start + Duration::from_secs(9)), []);
+    let mut inactive = introduced(start);
+    inactive.active = false;
+    assert_eq!(nudges(&mut inactive, start), []);
+}
+
+#[test]
+fn an_announce_naming_this_engine_is_not_adopted_as_the_followed_clock() {
+    let start = Instant::now();
+    let mut state = introduced(start);
+    let theirs = state.bmca;
+    // The receiver briefly names clock 7 (this engine) as its grandmaster.
+    let mut echo = announce(8, 5, 0);
+    echo[53..61].copy_from_slice(&7u64.to_be_bytes());
+    echo[47] = 95;
+    followed_packet(&mut state, &echo, 0, start, 7);
+    assert_eq!(state.clock_id, Some(8));
+    assert_eq!(state.bmca, theirs);
+    assert_eq!(state.wake.announces_naming_us, 1);
+    assert_eq!(state.wake.announces_without_sync, 2);
+    assert_eq!(state.packets.rejected, 0);
+}
+
+#[test]
+fn wake_state_survives_a_receiver_restart_and_a_started_wake_survives_reactivation() {
+    let start = Instant::now();
+    let mut state = introduced(start);
+    let at = start + INTRODUCTION_SETTLE;
+    finish_introduction(&mut state, start);
+    announces(&mut state, 3, at);
+    assert_eq!(nudges(&mut state, at), [Nudge::Announce(95, 128)]);
+    // The receiver restarts its PTP port under a new clock identity.
+    followed_packet(&mut state, &announce(9, 0, 0), 0, at, 7);
+    assert_eq!(state.clock_id, Some(9));
+    assert_eq!((state.wake.wakes, state.wake.attempts), (1, 1));
+    assert!(state.wake.closing.is_some());
+    // A member setup retry activates the peer again; the wake is still closed.
+    state.begin_session("127.0.0.1".parse().unwrap(), at);
+    assert_eq!(state.wake.introductions, 2);
+    let later = at + WAKE_GAP * 3;
+    let sent = nudges(&mut state, later);
+    assert_eq!(sent.first(), Some(&Nudge::Announce(97, 128)));
+}
+
+/// A receiver that announces at 4 Hz and starts syncing once `woken` says so.
+fn run_silent_receiver(woken: impl Fn(&[Vec<u8>]) -> bool) -> (PeerSnapshot, Vec<Vec<u8>>) {
     let (peer, remote_event, remote_general) = crate::test_net::ptp_receiver_sockets();
     remote_event.set_nonblocking(true).unwrap();
     remote_general.set_nonblocking(true).unwrap();
@@ -723,24 +853,25 @@ fn loop_wakes_a_silent_receiver_then_follows_its_sync() {
     timer.activate(peer, "127.0.0.1".parse().unwrap());
     let started = Instant::now();
     let mut buffer = [0u8; 2048];
-    let mut wakes = Vec::new();
+    let mut heard = Vec::new();
     let mut seq = 0u16;
     let mut next_packet = started;
-    // The receiver announces at 4 Hz and syncs only after the closing Announce.
-    while started.elapsed() < Duration::from_secs(6) && !timer.ready(peer) {
-        while let Ok((n, _)) = remote_general.recv_from(&mut buffer) {
-            if buffer[0] & 15 == 11 {
-                assert_eq!(n, 64);
-                wakes.push((buffer[47], buffer[52], started.elapsed()));
+    while started.elapsed() < Duration::from_secs(12) && !timer.ready(peer) {
+        for socket in [&remote_general, &remote_event] {
+            while let Ok((n, _)) = socket.recv_from(&mut buffer) {
+                // Subscription requests and Delay_Req are not part of a nudge.
+                let subscription = buffer[0] & 15 == 12 && n == 54;
+                if !subscription && buffer[0] & 15 != 1 {
+                    heard.push(buffer[..n].to_vec());
+                }
             }
         }
-        while remote_event.recv_from(&mut buffer).is_ok() {}
         if Instant::now() >= next_packet {
             next_packet += Duration::from_millis(250);
             remote_general
                 .send_to(&announce(8, seq, 0), local_general)
                 .unwrap();
-            if wakes.len() >= 2 {
+            if woken(&heard) {
                 let (sync, follow) = sync_pair(8, seq, clock.now_ns() + 5_000_000_000);
                 remote_event.send_to(&sync, local_event).unwrap();
                 remote_general.send_to(&follow, local_general).unwrap();
@@ -749,22 +880,52 @@ fn loop_wakes_a_silent_receiver_then_follows_its_sync() {
         }
         thread::sleep(Duration::from_millis(5));
     }
-    assert!(
-        timer.ready(peer),
-        "followed clock became ready after the wake"
-    );
-    assert_eq!(wakes.len(), 2, "one sequence: better, then worse");
-    assert_eq!((wakes[0].0, wakes[0].1), (95, 128));
-    assert_eq!((wakes[1].0, wakes[1].1), (97, 128));
-    let gap = wakes[1].2 - wakes[0].2;
-    assert!(gap >= Duration::from_millis(140) && gap < Duration::from_millis(400));
-    let snapshot = timer.snapshots().remove(0);
-    assert_eq!(snapshot.wake_attempts, 1);
-    assert_eq!(snapshot.packets.sent_by_type[11], 2);
+    assert!(timer.ready(peer), "the followed clock became ready");
+    (timer.snapshots().remove(0), heard)
+}
+
+#[test]
+fn loop_introduces_itself_and_follows_a_receiver_that_then_syncs() {
+    // This receiver starts syncing as soon as it has the follower Signaling.
+    let (snapshot, heard) =
+        run_silent_receiver(|heard| heard.iter().any(|p| p[0] & 15 == 12 && p.len() == 122));
+    let kinds: Vec<u8> = heard.iter().take(9).map(|p| p[0] & 15).collect();
+    // Follow_Up and Announce share a socket with Sync on another, so compare counts.
+    assert_eq!(kinds.iter().filter(|kind| **kind == 0).count(), 3);
+    assert_eq!(kinds.iter().filter(|kind| **kind == 8).count(), 3);
+    assert_eq!(kinds.iter().filter(|kind| **kind == 11).count(), 2);
+    assert_eq!(kinds.iter().filter(|kind| **kind == 12).count(), 1);
+    let announced = heard.iter().find(|p| p[0] & 15 == 11).unwrap();
+    assert_eq!((announced.len(), announced[47]), (64, 250));
+    assert_eq!((snapshot.wake_attempts, snapshot.introductions), (0, 1));
+    assert_eq!(snapshot.first_pair_after_wakes, Some(0));
     assert_eq!(snapshot.offset_source, Some("sync"));
     let report = serde_json::to_value(&snapshot).unwrap();
     let first = report["packets"]["first_received"]["11"].as_str().unwrap();
     assert_eq!(first.len(), 76 * 2, "the first Announce is kept as hex");
     assert!(first.starts_with("1b02004c"));
     assert!(report["packets"]["last_received"]["8"].is_string());
+    assert!(report["first_pair_ms"].is_u64());
+}
+
+#[test]
+fn loop_wakes_a_receiver_that_ignores_the_introduction() {
+    // This receiver syncs only after a better Announce followed by a worse one.
+    let (snapshot, heard) = run_silent_receiver(|heard| {
+        let priorities: Vec<u8> = heard
+            .iter()
+            .filter(|p| p[0] & 15 == 11)
+            .map(|p| p[47])
+            .collect();
+        priorities.windows(2).any(|pair| pair == [95, 97])
+    });
+    let priorities: Vec<u8> = heard
+        .iter()
+        .filter(|p| p[0] & 15 == 11)
+        .map(|p| p[47])
+        .collect();
+    assert_eq!(&priorities[..4], &[250, 250, 95, 97]);
+    assert_eq!((snapshot.wake_attempts, snapshot.introductions), (1, 1));
+    assert_eq!(snapshot.first_pair_after_wakes, Some(1));
+    assert!(snapshot.packets.sent_by_type[11] >= 4);
 }

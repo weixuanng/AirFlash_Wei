@@ -48,26 +48,42 @@ socket failure. Normal nonblocking polling is not logged as an error.
 `waiting_sync_pair` with many Announce (type 11) and Signaling (type 12)
 datagrams, no Sync (type 0) or Follow_Up (type 8), and `received_grants` 0 means
 the receiver is reachable and names itself grandmaster, but its clock is idle.
-A HomePod on software 27.2 does this until another PTP port takes part in
-master selection; it does not answer the unicast subscription requests.
+A HomePod on software 27.2 does this to a sender that never takes part in PTP
+as a clock; it does not answer the unicast subscription requests, and HomePods
+do not answer a Delay_Req that carries a real clock identity.
 
-From 0.2.7 the engine wakes such a clock the way nqptp does: after three
-Announces without Sync traffic it sends one Announce with a priority1 one step
-better than the receiver's, and 150 ms later one that is one step worse. The
-receiver negotiates, finds itself the best clock again and starts sending
-Sync/Follow_Up. The sequence is repeated every two seconds, at most three times,
-until a complete pair arrives; a complete pair restores that budget.
+From 0.2.7 the engine uses two remedies taken from working implementations:
 
-The snapshot reports this as `wake_attempts` and `announces_without_sync`.
-`packets.sent_by_type` counts what the engine sent (the wake Announces are type
-11), and `packets.first_received` / `packets.last_received` hold the first and
-latest datagram of each received type as hex, up to 128 bytes. The log also
-records `Receiver info:` (model and software version) and `Receiver timing:`
-(the key names and `timingPeerInfo` of the receiver's SETUP reply).
+1. **Introduction**, sent as soon as SETPEERS is accepted. It is what a Mac
+   sends when it joins as a clock that will follow: three Sync/Follow_Up pairs
+   125 ms apart, two Announces with priority1 250 (worse than a HomePod's 248),
+   then one Signaling with an 802.1AS message-interval request (Sync 8 per
+   second, Announce 4 per second) and two Apple extension TLVs.
+2. **Wake**, if three Announces still arrive without Sync traffic 1.5 s later.
+   This is nqptp's sequence for a silent Apple clock: one Announce with a
+   priority1 one step better than the receiver's, then two Announces one step
+   worse, 150 ms apart.
 
-If `wake_attempts` is 3 and Sync still never arrives, include the whole
-`Session failure` entry in the report: the Announce and Signaling samples show
-what the receiver expects.
+If the clock stays silent the engine repeats the introduction after 2 s and
+wakes once more 1.5 s after that, then stops. A single complete pair restores
+that budget; once three exchanges have made the clock usable it is never nudged
+again for that session, so a streaming receiver is left alone.
+
+The snapshot reports `introductions`, `wake_attempts`, `announces_without_sync`
+and `announces_naming_us` (Announces in which the receiver named the engine as
+grandmaster). `first_pair_ms`, `first_pair_after_wakes` and
+`first_pair_after_introductions` say when the first complete pair arrived and
+which remedy preceded it. `packets.sent_by_type` counts what the engine sent,
+and `packets.first_received` / `packets.last_received` hold the first and latest
+datagram of each received type as hex, up to 128 bytes. The log also records
+`Receiver info:` (model and software version) and `Receiver timing:` (the key
+names and `timingPeerInfo` of the receiver's SETUP reply, at most 2 KB).
+
+These entries contain local network addresses and a clock identity derived
+from a network adapter address. Remove them before posting a log publicly.
+
+If Sync still never arrives, include the whole `Session failure` entry in the
+report: the Announce and Signaling samples show what the receiver expects.
 
 ## Connected but no audio on a standalone HomePod
 

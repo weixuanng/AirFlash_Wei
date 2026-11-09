@@ -762,7 +762,7 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
                         // behaviour in a failure report; discovery does not log them.
                         if (kind == "peer_info")
                             log?.Invoke($"Receiver info: host {item.Text("host")}; model {item.Text("model", "unknown")}; software {item.Text("source_version", "unknown")}");
-                        if (kind == "setup_timing") log?.Invoke($"Receiver timing: {item.GetRawText()}");
+                        if (kind == "setup_timing") { var timing = item.GetRawText(); log?.Invoke($"Receiver timing: {(timing.Length > 2048 ? timing[..2048] + "…" : timing)}"); }
                         if (kind == "negotiated")
                         {
                             lock (_sync) { if (epoch != _generation) continue; _diagnostics = _diagnostics with { Negotiated = (_diagnostics.Negotiated ?? []).Where(n => item.Text("receiver_id").Length > 0 ? n.Text("receiver_id") != item.Text("receiver_id") : n.Text("host") != item.Text("host")).Append(item.Clone()).ToArray() }; }

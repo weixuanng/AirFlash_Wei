@@ -5,7 +5,7 @@ Changes since Airplay 0.2.6.
 ## HomePod stuck on "Connecting"
 
 - On HomePod software 27.2 the HomePod accepted the connection and announced its clock, but never sent the timing packets Airplay waits for, so every attempt ended with "PTP exchange did not become ready" and the panel stayed on "Connecting".
-- Airplay now prompts an idle HomePod clock to start, using the sequence the open-source nqptp project sends to Apple receivers. It is tried up to three times per connection attempt.
+- Airplay now introduces itself to the HomePod's clock the way a Mac does, and if the clock stays idle it prompts it to start with the sequence the open-source nqptp project uses for Apple receivers. Both are tried twice per connection attempt.
 - This fix has not been tested against a real HomePod. If it still does not connect, the log now contains what is needed to see why.
 
 ## Compact panel
