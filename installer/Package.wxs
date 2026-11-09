@@ -18,16 +18,7 @@
                            EndSessionMessage="yes"
                            Timeout="10"
                            Property="AIRPLAY_STILL_RUNNING"
-                           RebootPrompt="no"
-                           Sequence="1"/>
-    <!-- The engine has no window. Airplay stops it on exit; this only ends a straggler
-         so its installed file is not in use. -->
-    <util:CloseApplication Id="CloseRunningEngine"
-                           Target="airflash-engine.exe"
-                           TerminateProcess="1"
-                           Timeout="5"
-                           RebootPrompt="no"
-                           Sequence="2"/>
+                           RebootPrompt="no"/>
     <CustomAction Id="RequireAirplayExited"
                   Error="Airplay could not exit. Close Airplay, then retry installation or removal."/>
     <InstallExecuteSequence>
