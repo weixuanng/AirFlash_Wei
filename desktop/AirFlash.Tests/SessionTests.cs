@@ -362,7 +362,7 @@ public sealed class SessionTests
         process.EmitData(new
         {
             @event = "clock_status", phase = "starting",
-            engine_path = @"C:\Users\Test\AppData\Local\AirFlash\engine\hash\airflash-engine.exe",
+            engine_path = @"C:\Users\Test\AppData\Local\Airplay\engine\hash\airflash-engine.exe",
             members = new[] { new { host = "127.0.0.1", mode = "receiver", phase = "waiting_sync_pair", ready = false } },
             network = new { event_received = 4, general_received = 6 }
         });
@@ -873,7 +873,7 @@ public sealed class SessionTests
         Assert.True(controller.YieldedToOtherDevice);
         Assert.False(controller.RequiresManualReconnect);
         Assert.Equal(PlaybackState.Preempted, controller.Snapshot.State);
-        Assert.Equal(L.Get("Playing on another device. AirFlash will resume when the speaker is free."), controller.Snapshot.Message);
+        Assert.Equal(L.Get("Playing on another device. Airplay will resume when the speaker is free."), controller.Snapshot.Message);
         // The laptop speakers stay muted while waiting, never released in between.
         Assert.True(audio.Muted); Assert.Equal(restores, audio.Restores);
         // After one backoff step it retries on its own, but the speaker is still
