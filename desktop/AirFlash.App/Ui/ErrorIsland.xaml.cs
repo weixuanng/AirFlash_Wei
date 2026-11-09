@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Automation;
+using System.Windows.Automation.Peers;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -14,7 +15,8 @@ namespace AirFlash.App.Ui;
 public partial class ErrorIsland : UserControl
 {
     private const double CompactWidth = 132, CompactHeight = 34;
-    private const double ExpandedWidth = 352, ExpandedHeight = 72;
+    // Narrow enough to leave the header's Quit button (right 34 DIP) clickable.
+    private const double ExpandedWidth = 292, ExpandedHeight = 72;
     private static readonly TimeSpan Settle = TimeSpan.FromSeconds(4.5);
     private static readonly TimeSpan Quick = TimeSpan.FromMilliseconds(220);
     private readonly DispatcherTimer _settle;
@@ -60,7 +62,31 @@ public partial class ErrorIsland : UserControl
         TitleText.Text = Title;
         MessageText.Text = Message;
         Pill.ToolTip = Message.Length > 0 ? Message : null;
-        AutomationProperties.SetName(Pill, Message.Length > 0 ? $"{Title}. {Message}" : Title);
+        AutomationProperties.SetName(this, Message.Length > 0 ? $"{Title}. {Message}" : Title);
+        if (IsOpen) Announce();
+    }
+    // Screen readers hear each new error once.
+    private void Announce()
+    {
+        if (!IsVisible || !AutomationPeer.ListenerExists(AutomationEvents.LiveRegionChanged)) return;
+        Dispatcher.BeginInvoke(() =>
+            (UIElementAutomationPeer.FromElement(this) ?? UIElementAutomationPeer.CreatePeerForElement(this))?
+                .RaiseAutomationEvent(AutomationEvents.LiveRegionChanged), DispatcherPriority.Loaded);
+    }
+    protected override void OnGotKeyboardFocus(KeyboardFocusChangedEventArgs args)
+    {
+        base.OnGotKeyboardFocus(args);
+        Pill.BorderBrush = new SolidColorBrush(Color.FromRgb(0x0A, 0x84, 0xFF)); Pill.BorderThickness = new Thickness(2);
+    }
+    protected override void OnLostKeyboardFocus(KeyboardFocusChangedEventArgs args)
+    {
+        base.OnLostKeyboardFocus(args);
+        Pill.BorderBrush = null; Pill.BorderThickness = new Thickness(0);
+    }
+    protected override void OnKeyDown(KeyEventArgs args)
+    {
+        if (args.Key is Key.Enter or Key.Space) { args.Handled = true; Morph(!_expanded); return; }
+        base.OnKeyDown(args);
     }
 
     private void Sync(bool replay)
@@ -78,10 +104,13 @@ public partial class ErrorIsland : UserControl
             {
                 Visibility = Visibility.Visible;
                 Snap(CompactWidth - 40, CompactHeight - 6, compact: 0, expanded: 0, scale: Motion.Active ? 0.6 : 1, opacity: Motion.Active ? 0 : 1);
-                Animate(Pill, OpacityProperty, 1, Quick, Motion.EaseOut);
-                AnimateScale(1);
             }
+            // Also reverses a close that is still fading out.
+            if (Motion.Active) Animate(Pill, OpacityProperty, 1, Quick, Motion.EaseOut);
+            else { Pill.BeginAnimation(OpacityProperty, null); Pill.Opacity = 1; }
+            AnimateScale(1);
             Morph(expanded: true);
+            Announce();
         }
         else if (Visibility == Visibility.Visible) Close();
     }

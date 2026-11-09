@@ -295,8 +295,11 @@ internal static class UiSmoke
             Check(Enumerable.Range(0, 24 * 24).Any(i => pixels[i * 4 + 3] != 0),
                 $"{icon.Name} renders nontransparent pixels without glyph lookup", checks);
             var brush = (icon.Stroke ?? icon.Fill) as SolidColorBrush;
-            var expected = ResourceColor(icon.Name == "PrimaryIcon" ? "AccentForegroundBrush" : "AccentBrush");
-            Check(brush?.Color == expected, $"{icon.Name} follows the current theme color", checks);
+            // Both glyphs sit on accent fills: the primary button and the receiver's accent tile.
+            Check(brush?.Color == ResourceColor("AccentForegroundBrush"), $"{icon.Name} follows the current theme color", checks);
+            if (icon.Name == "ReceiverIcon")
+                Check(VisualTreeHelper.GetParent(icon) is Border { Background: SolidColorBrush tile } && tile.Color == ResourceColor("AccentBrush"),
+                    "ReceiverIcon sits on an accent-coloured tile", checks);
             if (icon.Name == "PrimaryIcon")
             {
                 var button = Descendants(panel).OfType<Button>().Single(b => ReferenceEquals(b.Command, app.PrimaryCommand));
@@ -308,14 +311,15 @@ internal static class UiSmoke
     }
     private static void CheckThemeColors(bool dark, List<string> checks)
     {
-        var expected = dark ? Color.FromRgb(0x78, 0xA9, 0xFF) : Color.FromRgb(0x25, 0x63, 0xEB);
+        // Apple systemBlue: #0A84FF in dark mode, #007AFF in light mode.
+        var expected = dark ? Color.FromRgb(0x0A, 0x84, 0xFF) : Color.FromRgb(0x00, 0x7A, 0xFF);
         Check(ResourceColor("AccentBrush") == expected, $"{(dark ? "dark" : "light")} custom accent is blue", checks);
         Check(ResourceColor("AccentFillColorDefaultBrush") == expected, $"{(dark ? "dark" : "light")} Fluent accent is blue", checks);
         Check(ResourceColor("SystemColorHighlightColorBrush") == expected, $"{(dark ? "dark" : "light")} highlight is blue", checks);
         Check(ResourceColor("ProgressBarForeground") == expected, $"{(dark ? "dark" : "light")} progress accent is blue", checks);
         Check(ResourceColor("SliderThumbBackground") == expected, $"{(dark ? "dark" : "light")} slider accent is blue", checks);
         Check(ResourceColor("SystemColorWindowColorBrush") != Colors.Magenta, $"{(dark ? "dark" : "light")} window color is not magenta", checks);
-        Check(ResourceColor("SystemColorHighlightTextColorBrush") == (dark ? Color.FromRgb(0x16, 0x22, 0x39) : Colors.White), $"{(dark ? "dark" : "light")} accent text is readable", checks);
+        Check(ResourceColor("SystemColorHighlightTextColorBrush") == Colors.White, $"{(dark ? "dark" : "light")} accent text is readable", checks);
     }
     private static Color ResourceColor(string key) => Application.Current.Resources[key] switch
     {
