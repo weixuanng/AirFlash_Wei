@@ -42,7 +42,8 @@ public static class AppPaths
         var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
         var root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Name, "engine");
         var installed = Path.Combine(AppContext.BaseDirectory, EngineFileName);
-        if (Matches(installed, hash)) { RemoveStaleEngines(root, keep: null); return installed; }
+        if (Matches(installed, hash)) { RemoveStaleEngines(root, keep: null); Log($"Startup stage=engine-select installed {installed}"); return installed; }
+        if (File.Exists(installed)) Log($"Startup stage=engine-select installed engine differs from the embedded one; extracting {hash}");
         var directory = Path.Combine(root, hash);
         Directory.CreateDirectory(directory);
         var target = Path.Combine(directory, EngineFileName);
@@ -53,6 +54,7 @@ public static class AppPaths
             finally { if (File.Exists(temp)) File.Delete(temp); }
         }
         RemoveStaleEngines(root, keep: hash);
+        Log($"Startup stage=engine-select extracted {target}");
         return target;
     }
     private static bool Matches(string path, string hash)

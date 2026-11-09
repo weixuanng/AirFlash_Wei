@@ -24,7 +24,6 @@ $fixtureVersion = if (-not $previous) { Get-AirFlashInstallerFixtureVersion -Cur
 # GetFullPath gives Windows separators, which the firewall filter's exact path match needs.
 $installed = [IO.Path]::GetFullPath((Join-Path $env:ProgramFiles 'Airplay/Airplay.exe'))
 $installedEngine = [IO.Path]::GetFullPath((Join-Path $env:ProgramFiles 'Airplay/airflash-engine.exe'))
-$engineHash = (Get-FileHash native/airflash-engine/target/release/airflash-engine.exe).Hash
 $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 # Find the MSI's rule by name, then confirm it names the installed engine (case-insensitive path).
 function Firewall-Rules {
@@ -47,6 +46,22 @@ function Run-Msi([string[]]$Arguments, [string]$Name) {
     $process = Start-Process msiexec.exe -ArgumentList ($Arguments + @('/qn','/norestart','/L*v',"`"$log`"")) -Wait -PassThru -WindowStyle Hidden
     if ($process.ExitCode -notin @(0,3010)) { Get-Content $log -Tail 60; throw "MSI $Name failed: $($process.ExitCode)" }
 }
+# The expected engine comes from the MSI under test, so released assets verify without a native build.
+$adminImage = Join-Path $root 'artifacts/installer-test/admin-image'
+Run-Msi @('/a',"`"$msi`"","TARGETDIR=`"$adminImage`"") 'admin-extract'
+$packagedEngine = @(Get-ChildItem -LiteralPath $adminImage -Recurse -Filter 'airflash-engine.exe' -File)
+if ($packagedEngine.Count -ne 1) { throw "Expected one packaged engine; found $($packagedEngine.Count)." }
+$engineHash = (Get-FileHash $packagedEngine[0].FullName).Hash
+# The installed app must choose the installed engine, or the firewall rule covers nothing.
+function Check-EngineSelection {
+    $report = Join-Path $root 'artifacts/installer-test/self-check.json'
+    if (Test-Path $report) { Remove-Item $report }
+    $process = Start-Process -FilePath $installed -ArgumentList @('--self-check', '--output', ('"' + $report + '"')) -PassThru -WindowStyle Hidden
+    if (-not $process.WaitForExit(30000)) { $process.Kill(); throw 'Installed self-check timed out.' }
+    $result = Get-Content $report -Raw | ConvertFrom-Json
+    if ($process.ExitCode -ne 0 -or -not $result.ok) { throw 'Installed self-check failed.' }
+    if ($result.engine -ne $installedEngine) { throw "Installed app used $($result.engine) instead of $installedEngine." }
+}
 function Entries {
     @(Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue | Where-Object DisplayName -EQ 'Airplay')
 }
@@ -61,6 +76,7 @@ function Check-Installed {
 }
 Run-Msi @('/i',"`"$msi`"") 'fresh-install'
 Check-Installed
+Check-EngineSelection
 Run-Msi @('/fa',"`"$msi`"") 'repair'
 Check-Installed
 Run-Msi @('/x',"`"$msi`"") 'first-uninstall'
@@ -80,7 +96,7 @@ if ($previous) {
     foreach ($file in @('AirFlash.Package.wixproj','Installer.props','Package.wxs','License.rtf','Assets')) {
         Copy-Item (Join-Path $root "installer/$file") (Join-Path $fixtureProject $file) -Recurse
     }
-    & ./scripts/dotnet.ps1 build (Join-Path $fixtureProject 'AirFlash.Package.wixproj') -c Release "-p:ProductVersion=$fixtureVersion" "-p:AppExe=$root/dist/Airplay.exe" "-p:AppIcon=$root/desktop/AirFlash.App/Assets/app.ico" "-p:UiLicenseFile=$root/installer/License.rtf" "-p:EngineExe=$root/native/airflash-engine/target/release/airflash-engine.exe" "-p:OutputPath=$oldDir/" '-p:DebugType=none'
+    & ./scripts/dotnet.ps1 build (Join-Path $fixtureProject 'AirFlash.Package.wixproj') -c Release "-p:ProductVersion=$fixtureVersion" "-p:AppExe=$root/dist/Airplay.exe" "-p:AppIcon=$root/desktop/AirFlash.App/Assets/app.ico" "-p:UiLicenseFile=$root/installer/License.rtf" "-p:EngineExe=$($packagedEngine[0].FullName)" "-p:OutputPath=$oldDir/" '-p:DebugType=none'
     if ($LASTEXITCODE) { throw 'Cannot build upgrade fixture.' }
 }
 if ((Get-FileHash $msi).Hash -ne $msiHash -or (Get-FileHash dist/Airplay.exe).Hash -ne $exeHash) { throw 'Fixture build changed release assets.' }

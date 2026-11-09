@@ -125,6 +125,8 @@ public static class Motion
     public static void SetBreathe(DependencyObject element, bool value) => element.SetValue(BreatheProperty, value);
 
     private static readonly double[] BarPeriods = [0.46, 0.62, 0.38, 0.54];
+    // Still bars (animations off) keep a varied, readable shape.
+    private static readonly double[] BarStill = [0.55, 1, 0.7, 0.85];
     private const double BarRest = 0.35;
 
     private static void OnLoopChanged(DependencyObject element, DependencyPropertyChangedEventArgs args)
@@ -141,15 +143,16 @@ public static class Motion
     private static void UpdateLoops(UIElement target)
     {
         var run = Active && target.IsVisible;
-        if (target is Panel bars)
+        if (GetPlaying(target) && target is Panel bars)
             for (var i = 0; i < bars.Children.Count; i++)
             {
                 var bar = bars.Children[i];
                 if (bar.RenderTransform is not ScaleTransform scale || scale.IsFrozen)
                 {
                     bar.RenderTransformOrigin = new Point(0.5, 1);
-                    bar.RenderTransform = scale = new ScaleTransform(1, BarRest);
+                    bar.RenderTransform = scale = new ScaleTransform();
                 }
+                scale.ScaleY = Active ? BarRest : BarStill[i % BarStill.Length];
                 if (run && GetPlaying(target))
                 {
                     var bounce = new DoubleAnimation(BarRest, 1, TimeSpan.FromSeconds(BarPeriods[i % BarPeriods.Length]))
