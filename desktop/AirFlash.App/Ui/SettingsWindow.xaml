@@ -7,6 +7,7 @@
           <StackPanel>
             <TextBlock Text="{loc:Text 'Startup and connection'}" Style="{StaticResource SectionTitle}"/>
             <CheckBox Content="{loc:Text 'Start when signing in to Windows'}" IsChecked="{Binding Draft.StartAtLogin}"/>
+            <CheckBox Content="{loc:Text 'Connect to the last used speaker when AirFlash starts'}" IsChecked="{Binding Draft.AutoConnectLastReceiver}"/>
             <CheckBox Content="{loc:Text 'Connect automatically when a receiver is found'}" IsChecked="{Binding Draft.AutoConnectOnDiscover}"/>
             <CheckBox Content="{loc:Text 'Reconnect automatically after a disconnect'}" IsChecked="{Binding Draft.ForceReconnect}"/>
             <StackPanel Orientation="Horizontal" IsEnabled="{Binding Draft.ForceReconnect}">
@@ -14,6 +15,7 @@
               <TextBox Width="80" Text="{Binding Draft.MaxReconnectAttempts, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" AutomationProperties.Name="{loc:Text 'Maximum retry attempts'}"/>
               <TextBlock Text="{loc:Text 'times'}" VerticalAlignment="Center" Margin="10,0,0,0"/>
             </StackPanel>
+            <CheckBox Content="{loc:Text 'Resume automatically when another device releases the speaker'}" IsChecked="{Binding Draft.ResumeAfterTakeover}" Margin="0,13,0,0"/>
             <TextBlock Text="{loc:Text 'Keep running in the tray when the panel closes. Choose Quit from the tray menu to exit.'}" Style="{StaticResource Hint}" Margin="0,16,0,0"/>
           </StackPanel>
         </Border>
@@ -49,6 +51,12 @@
     <DataTemplate x:Key="Page1">
       <StackPanel>
         <Border Style="{StaticResource Card}">
+          <TextBlock Text="{loc:Text 'AirFlash streams at 44.1 kHz with Normal latency (200 ms) and keeps the speaker connected through silence. Change these only if playback needs tuning.'}" Style="{StaticResource Hint}"/>
+        </Border>
+        <!-- Codec, rate, transport and clock live in each receiver's Advanced settings. -->
+        <Expander Header="{loc:Text 'Advanced'}" IsExpanded="{Binding StreamingAdvancedExpanded}" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,12" AutomationProperties.Name="{loc:Text 'Advanced'}">
+        <StackPanel Margin="0,14,0,0">
+        <Border Style="{StaticResource Card}">
           <StackPanel>
             <TextBlock Text="{loc:Text 'Latency mode'}" Style="{StaticResource SectionTitle}"/>
             <RadioButton Content="{loc:Text 'Real-time · target 120 ms'}" GroupName="LatencyMode" IsChecked="{Binding Draft.LatencyMode, Converter={StaticResource Equal}, ConverterParameter=realtime}"/>
@@ -76,6 +84,8 @@
             <TextBlock Text="{loc:Text 'Release the AirPlay session during standby and reconnect when audio is detected. Audio during reconnection may be missed.'}" Style="{StaticResource Hint}" Margin="0,14,0,0"/>
           </StackPanel>
         </Border>
+        </StackPanel>
+        </Expander>
       </StackPanel>
     </DataTemplate>
     <Style x:Key="EqualizerSlider" TargetType="Slider" BasedOn="{StaticResource {x:Type Slider}}">
@@ -438,7 +448,7 @@
       </Setter>
     </Style>
   </Window.Resources>
-  <Grid Background="{DynamicResource CanvasBrush}">
+  <Grid x:Name="Root" Background="{DynamicResource CanvasBrush}">
     <Grid.RowDefinitions>
       <RowDefinition Height="*"/>
       <RowDefinition Height="Auto"/>

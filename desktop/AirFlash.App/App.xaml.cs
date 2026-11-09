@@ -46,6 +46,9 @@ public partial class App : Application
         var languageIndex = Array.IndexOf(args.Args, "--ui-language");
         var smokeLanguage = (args.Args.Contains("--ui-smoke") || args.Args.Contains("--tray-smoke") || args.Args.Contains("--ui-perf")) && languageIndex >= 0 && languageIndex + 1 < args.Args.Length
             ? new[] { args.Args[languageIndex + 1] } : null;
+        // Verification runs measure final layout; cosmetic entrance motion would
+        // leave rows mid-animation (render offset, partial opacity) during checks.
+        if (Program.NeedsDiagnosticIsolation(args.Args)) Motion.Enabled = false;
         try
         {
             L.Initialize(smokeLanguage);
@@ -94,6 +97,8 @@ public partial class App : Application
             _instance.Listen(() => Dispatcher.BeginInvoke(() => { if (_settings is not null) _settings.Activate(); else _panel.ShowPanel(); }));
             _viewModel.SettingsChanged += OnSettingsChanged;
             _viewModel.Start();
+            // Auto-start with Windows (--startup) stays quietly in the tray; a
+            // manual launch, including the first run, opens the panel.
             if (!args.Args.Contains("--startup")) _panel.ShowPanel();
             AppPaths.Log("WPF host started, JSONL v1. Startup stage=shell ready");
             await _engine.InitializeAsync();
@@ -134,7 +139,12 @@ public partial class App : Application
         }, System.Windows.Threading.DispatcherPriority.ContextIdle);
     }
     private void ShowSettings() => ShowSettings(null);
-    private void ShowSettingsPage(int page) => ShowSettings(page);
+    private void ShowSettingsPage(int page)
+    {
+        ShowSettings(page);
+        // The panel's latency button leads to settings that live under Advanced.
+        if (page == SettingsViewModel.StreamingPage && _settings is not null) _settings.ViewModel.StreamingAdvancedExpanded = true;
+    }
     private void ShowSettings(int? page)
     {
         if (_viewModel is null) return;

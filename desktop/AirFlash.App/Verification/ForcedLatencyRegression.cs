@@ -34,6 +34,9 @@ internal static class ForcedLatencyRegression
         var window = new SettingsWindow(app);
         window.ViewModel.SelectedPage = SettingsViewModel.StreamingPage;
         window.Show(); await Pump();
+        // Global latency and Standby sit behind the page's Advanced expander.
+        foreach (var expander in Descendants(window).OfType<Expander>()) expander.IsExpanded = true;
+        await Pump();
         try
         {
             var vm = window.ViewModel;

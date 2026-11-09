@@ -107,7 +107,9 @@ public sealed class SettingsStore : ISettingsStore
                 // An absent file does not discharge a previous unreadable-file obligation.
                 _mixedMigrationPending = false;
                 UpdateWarning();
-                return new();
+                // Only a genuinely new installation adopts the on-by-default login
+                // item; a pending unreadable-file recovery keeps it off.
+                return _recoveryError is null ? new() : new() { StartAtLogin = false };
             }
             catch (NotSupportedException) { _unsupportedSchema = true; throw; }
             catch (Exception error) when (error is JsonException or IOException or UnauthorizedAccessException or InvalidOperationException or FormatException or ArgumentException)
@@ -116,7 +118,9 @@ public sealed class SettingsStore : ISettingsStore
                 _mixedMigrationPending = false;
                 _recoveryError = error.Message;
                 UpdateWarning();
-                return new();
+                // Unreadable configuration keeps the safe upstream behaviour:
+                // never register a login item the user may have turned off.
+                return new() { StartAtLogin = false };
             }
         }
     }

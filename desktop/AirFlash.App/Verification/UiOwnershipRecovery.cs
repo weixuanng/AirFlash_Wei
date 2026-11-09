@@ -13,7 +13,9 @@ internal static class UiOwnershipRecovery
         {
             var store = new MemoryStore();
             var settings = store.Load(); settings.AutoConnectOnDiscover = true;
-            settings.ForceReconnect = true; settings.MuteWhileStreaming = true; store.Save(settings);
+            settings.ForceReconnect = true; settings.MuteWhileStreaming = true;
+            settings.ResumeAfterTakeover = false; // this fixture covers the manual-reconnect path
+            store.Save(settings);
             var receiver = new Receiver("ownership-test", "Ownership test", "192.0.2.10");
             var discovery = new MockDiscovery { Items = [receiver] }; var audio = new MockAudio(); var engine = new MockFactory();
             await using var app = new AppViewModel(store, discovery, new MockAutostart(), audio, engine, Application.Current.Dispatcher);

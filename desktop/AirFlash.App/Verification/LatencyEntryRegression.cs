@@ -41,6 +41,9 @@ internal static class LatencyEntryRegression
             var settingsWindow = new SettingsWindow(app);
             settingsWindow.ViewModel.SelectedPage = SettingsViewModel.StreamingPage;
             settingsWindow.Show(); await Pump();
+            // Global latency sits behind the page's Advanced expander.
+            foreach (var expander in Descendants(settingsWindow).OfType<Expander>()) expander.IsExpanded = true;
+            await Pump();
             try
             {
                 var adaptive = Descendants(settingsWindow).OfType<RadioButton>()

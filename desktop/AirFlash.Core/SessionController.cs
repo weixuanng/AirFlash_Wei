@@ -15,8 +15,11 @@ public sealed record SessionSnapshot(PlaybackState State, Receiver? Receiver = n
     public int? PendingLatency { get; init; }
     public string ActionHint { get; init; } = "";
 }
-public sealed record SessionTiming(TimeSpan Connect, TimeSpan Read, TimeSpan Pin, TimeSpan Retry)
+public sealed record SessionTiming(TimeSpan Connect, TimeSpan Read, TimeSpan Pin, TimeSpan Retry, TimeSpan? Yield = null)
 {
+    /// <summary>First wait after the receiver was taken by another device. Later
+    /// waits double up to six times this value (5 → 10 → 20 → 30 s by default).</summary>
+    public TimeSpan YieldBase => Yield ?? TimeSpan.FromSeconds(5);
     public static SessionTiming Default { get; } = new(TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(120), TimeSpan.FromSeconds(1));
 }
 public sealed class SessionController(IEngineFactory factory, IAudioService audio, Action<string>? log = null, SessionTiming? timing = null, Action<DesktopSessionRecord>? sessionRecords = null, TimeProvider? clock = null) : IAsyncDisposable
@@ -48,6 +51,14 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
     private bool _transportStreaming;
     private bool _manualRecoveryRequired;
     public bool RequiresManualReconnect { get { lock (_sync) return _manualRecoveryRequired; } }
+    // Set while the receiver belongs to another sender and this session waits to
+    // resume automatically (AppSettings.ResumeAfterTakeover).
+    private bool _yielding, _yieldedToOther;
+    /// <summary>The session is waiting for the receiver to become free again.</summary>
+    public bool IsYielding { get { lock (_sync) return _yielding; } }
+    /// <summary>The wait is because another device is using the receiver (a
+    /// takeover, or the automatic-start probe saw it busy elsewhere).</summary>
+    public bool YieldedToOtherDevice { get { lock (_sync) return _yielding && _yieldedToOther; } }
     private readonly SemaphoreSlim _equalizerWriter = new(1, 1);
     private EqualizerSettings? _equalizerPreview;
     private Guid? _equalizerOwner;
@@ -341,7 +352,7 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
     }
     private async Task StopLockedAsync()
     {
-        lock (_sync) { ++_generation; _discoveredReceiver = null; _volumeEdit?.Cancel(); _volumeEdit?.Dispose(); _volumeEdit = null; _deviceVolume = new(); _memberVolumes.Clear(); _memberHosts.Clear(); }
+        lock (_sync) { ++_generation; _yielding = _yieldedToOther = false; _discoveredReceiver = null; _volumeEdit?.Cancel(); _volumeEdit?.Dispose(); _volumeEdit = null; _deviceVolume = new(); _memberVolumes.Clear(); _memberHosts.Clear(); }
         if (_lifetime is not null) await _lifetime.CancelAsync().ConfigureAwait(false);
         if (_cleanupFailure is { } cleanup)
         {
@@ -625,8 +636,12 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
         // count and the compact sequence) instead of only the latest reason.
         var reconnects = 0;
         var transportFaults = new List<string>();
+        // Consecutive waits for a receiver held by another sender (0: not yielding).
+        var yieldWaits = 0;
         while (!cancellation.IsCancellationRequested)
         {
+            // The automatic-start probe reported the receiver busy with another sender.
+            var busyElsewhere = false;
             var attemptIntent = intent;
             intent = SessionStartIntent.Automatic;
             lock (_sync)
@@ -660,7 +675,10 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
                 try
                 {
                     lock (_sync) { if (epoch == _generation) { _diagnostics = _diagnostics with { Transport = null, Warnings = [], Negotiated = [], ClockStatus = null }; _warnings.Clear(); _deviceVolume = new(); _memberVolumes.Clear(); _memberHosts.Clear(); foreach (var pair in hosts) _memberHosts[pair.Key] = pair.Value; _volumeEdit?.Cancel(); _snapshot = _snapshot with { Metrics = null }; } }
-                    Publish(epoch, PlaybackState.Connecting, attempts > 0 ? L.Format("Reconnecting ({0}/{1})", attempts, settings.MaxReconnectAttempts) : L.Get("Connecting…"));
+                    // A quiet retry while waiting for another device keeps the
+                    // "playing on another device" state instead of flashing Connecting.
+                    if (yieldWaits == 0)
+                        Publish(epoch, PlaybackState.Connecting, attempts > 0 ? L.Format("Reconnecting ({0}/{1})", attempts, settings.MaxReconnectAttempts) : L.Get("Connecting…"));
                     var deadline = DateTime.UtcNow + _timing.Connect;
                     await connection.SendAsync(session, "hello", null, cancellation).ConfigureAwait(false);
                     var hello = await ReadEventAsync(connection, session, _timing.Connect, cancellation).ConfigureAwait(false);
@@ -727,6 +745,8 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
                             continue;
                         }
                         var kind = item.Text("event");
+                        if (kind == "warning" && item.Text("code") == "automatic_start_probe"
+                            && item.Text("message").Contains("busy_elsewhere", StringComparison.Ordinal)) busyElsewhere = true;
                         if (kind == "error") throw new EngineFailure(EngineNotice.Parse(item));
                         if (kind == "stopped") throw new IOException(L.Get("The audio session ended unexpectedly."));
                         if (kind == "diag_summary")
@@ -770,7 +790,9 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
                         {
                             AcceptLatency(item);
                             startedAt = Stopwatch.GetTimestamp();
-                            lock (_sync) { if (epoch != _generation) continue; _transportStreaming = true; }
+                            lock (_sync) { if (epoch != _generation) continue; _transportStreaming = true; _yielding = _yieldedToOther = false; }
+                            if (yieldWaits > 0) log?.Invoke($"Session resumed after yielding; waits={yieldWaits}");
+                            yieldWaits = 0;
                             await ApplyLocalMuteAsync().ConfigureAwait(false);
                             log?.Invoke($"Streaming started: {receiver.Id}; target latency {_adaptiveBase} ms; reconnect attempts {attempts}");
                             Publish(epoch, PlaybackState.Streaming);
@@ -884,6 +906,10 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
             catch (EngineShutdownException) { throw; }
             catch (Exception error)
             {
+                // A takeover that will be waited out keeps the laptop speakers
+                // muted, so mark the wait before the stream's mute is released.
+                if (error is EngineFailure { Notice.Code: "preempted" or "ownership_unconfirmed" } && _settings.ResumeAfterTakeover)
+                    lock (_sync) { if (epoch == _generation) _yielding = true; }
                 await RestoreAudioAsync().ConfigureAwait(false);
                 if (cancellation.IsCancellationRequested) return;
                 if (error is AdaptiveRebuild rebuild)
@@ -898,6 +924,35 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
                 }
                 ++attempts;
                 if (RecordFailure(epoch, error) is not { } notice) return;
+                if (notice.Code is "preempted" or "ownership_unconfirmed" && _settings.ResumeAfterTakeover)
+                {
+                    // Yield instead of fighting: wait one backoff step, then retry.
+                    // Every retry is an automatic start, which the engine connects
+                    // only after its read-only probe finds the receiver free, so it
+                    // never takes the speaker back; a busy speaker just fails fast.
+                    var otherDevice = notice.Code == "preempted" || busyElsewhere;
+                    lock (_sync)
+                    {
+                        if (epoch != _generation) return;
+                        _yielding = true; _yieldedToOther = otherDevice;
+                    }
+                    attempts = 0;
+                    var wait = YieldDelay(++yieldWaits);
+                    log?.Invoke($"Session yielded; code={notice.Code}; reason={notice.Reason}; busy_elsewhere={busyElsewhere}; wait={yieldWaits}; delay_ms={wait.TotalMilliseconds}");
+                    Publish(epoch, PlaybackState.Preempted, otherDevice
+                        ? L.Get("Playing on another device. AirFlash will resume when the speaker is free.")
+                        : L.Get("Waiting for the speaker to become available."));
+                    await Task.Delay(wait, _clock, cancellation).ConfigureAwait(false);
+                    continue;
+                }
+                if (yieldWaits > 0)
+                {
+                    // The speaker stopped answering in a way that is not ownership:
+                    // leave the quiet wait and use the normal reconnect policy.
+                    lock (_sync) { if (epoch == _generation) _yielding = _yieldedToOther = false; }
+                    yieldWaits = 0;
+                    await ApplyLocalMuteAsync().ConfigureAwait(false);
+                }
                 Publish(epoch, FailureState(notice), FailureMessage(receiver, notice), failure: notice);
                 // A preempted receiver belongs to another controller now; retrying
                 // would fight it. The user gets an explicit reconnect action instead.
@@ -918,6 +973,11 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
             await Task.Delay(delay, cancellation).ConfigureAwait(false);
             lock (_sync) { if (epoch == _generation) _diagnostics = _diagnostics with { ReconnectCount = _diagnostics.ReconnectCount + 1 }; }
         }
+    }
+    private TimeSpan YieldDelay(int wait)
+    {
+        var step = _timing.YieldBase.TotalMilliseconds;
+        return TimeSpan.FromMilliseconds(Math.Min(step * Math.Pow(2, Math.Min(wait, 4) - 1), step * 6));
     }
     private async Task PairMembersAsync(Receiver receiver, Func<Receiver, CancellationToken, Task<string?>> requestPin, long epoch, CancellationToken cancellation)
     {
@@ -984,7 +1044,7 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
         lock (_sync)
         {
             if (epoch != _generation) return null;
-            if (notice.Code is "preempted" or "ownership_unconfirmed") _manualRecoveryRequired = true;
+            if (notice.Code is "preempted" or "ownership_unconfirmed" && !_settings.ResumeAfterTakeover) _manualRecoveryRequired = true;
             // A failed reconnect must not erase the last streaming failure snapshot.
             diagnostics = _diagnostics = _diagnostics with { LastFault = notice, CaptureBeforeFault = _snapshot.Metrics ?? _diagnostics.CaptureBeforeFault, TransportBeforeFault = _diagnostics.Transport ?? _diagnostics.TransportBeforeFault };
         }
@@ -1043,7 +1103,9 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
         try
         {
             bool mute; string? endpoint;
-            lock (_sync) { mute = _transportStreaming && _settings.ShouldMuteEndpoint; endpoint = _settings.EffectiveEndpoint; }
+            // Waiting for a speaker held by another device keeps the laptop
+            // muted too; otherwise the music would play out of its speakers.
+            lock (_sync) { mute = (_transportStreaming || _yielding) && _settings.ShouldMuteEndpoint; endpoint = _settings.EffectiveEndpoint; }
             if (mute) await audio.MuteAsync(endpoint).ConfigureAwait(false);
             else await RestoreAudioCoreAsync().ConfigureAwait(false);
         }

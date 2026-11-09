@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
+using System.Windows.Media;
 using AirFlash.App.Services;
 using AirFlash.App.ViewModels;
 using AirFlash.Core;
@@ -52,6 +53,9 @@ public partial class SettingsWindow : Window
     private void OnSourceInitialized(object? sender, EventArgs args)
     {
         NativeWindowPlacement.CenterSettings(this);
+        // Mica shows through the canvas only when DWM accepted it; otherwise the
+        // window keeps its opaque canvas (Windows 10, 21H2, high contrast).
+        if (WindowThemeService.TryApplyMica(this)) { Background = Brushes.Transparent; Root.Background = Brushes.Transparent; }
     }
     private void OnEqualizerMouseWheel(object sender, MouseWheelEventArgs args)
     {

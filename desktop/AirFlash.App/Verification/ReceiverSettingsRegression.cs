@@ -66,6 +66,7 @@ internal static class ReceiverSettingsRegression
             Check(app.Snapshot.State == PlaybackState.Connecting && !app.CanEditGlobalLatency, "connecting independent receiver latency disables the global default", checks);
             engine.EmitEvent!(new { @event = "streaming" });
             await Until(() => app.Snapshot.State == PlaybackState.Streaming); await Pump(); panel.ShowPanel(); await Pump();
+            ((System.Windows.Controls.Primitives.ToggleButton)panel.FindName("AdvancedToggle")).IsChecked = true; await Pump();
             var latency = Descendants(panel).OfType<ComboBox>().Single(c => System.Windows.Automation.AutomationProperties.GetName(c) == L.Get("Global latency mode"));
             Check(!app.CanEditGlobalLatency && !latency.IsEnabled && app.GlobalLatencyHint.Length > 0, "playing independent receiver latency disables global dropdown and explains where to adjust it", checks);
             var latencySettingsButton = Descendants(panel).OfType<Button>().Single(b => System.Windows.Automation.AutomationProperties.GetName(b) == L.Get("Latency settings"));

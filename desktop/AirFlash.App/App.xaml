@@ -21,7 +21,8 @@
       <SolidColorBrush x:Key="CaptionBrush" Color="#EAF1FF"/>
       <SolidColorBrush x:Key="CaptionTextBrush" Color="#162239"/>
       <SolidColorBrush x:Key="ErrorBrush" Color="#C32D40"/>
-      <FontFamily x:Key="BodyFont">Segoe UI, Microsoft YaHei UI</FontFamily>
+      <!-- Windows 11's variable UI face first; older systems fall back to Segoe UI. -->
+      <FontFamily x:Key="BodyFont">Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI</FontFamily>
       <!-- Flat text menus explicitly use body typography, including when opened from an icon. -->
       <Style x:Key="TextMenuItem" TargetType="MenuItem">
         <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
@@ -237,15 +238,33 @@
         <Setter Property="Template">
           <Setter.Value>
             <ControlTemplate TargetType="Button">
-              <Border x:Name="Chrome" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+              <Border x:Name="Chrome" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6" Padding="{TemplateBinding Padding}" RenderTransformOrigin="0.5,0.5">
+                <Border.RenderTransform><ScaleTransform/></Border.RenderTransform>
                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="True"/>
               </Border>
               <ControlTemplate.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
                   <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource TintBrush}"/>
                 </Trigger>
+                <!-- Press: settle to 0.97 quickly, release on a ~0.5 s ease-out curve. Render-only, layout is unchanged. -->
                 <Trigger Property="IsPressed" Value="True">
-                  <Setter TargetName="Chrome" Property="Opacity" Value="0.72"/>
+                  <Setter TargetName="Chrome" Property="Opacity" Value="0.85"/>
+                  <Trigger.EnterActions>
+                    <BeginStoryboard>
+                      <Storyboard>
+                        <DoubleAnimation Storyboard.TargetName="Chrome" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="0.97" Duration="0:0:0.12"><DoubleAnimation.EasingFunction><QuinticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction></DoubleAnimation>
+                        <DoubleAnimation Storyboard.TargetName="Chrome" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="0.97" Duration="0:0:0.12"><DoubleAnimation.EasingFunction><QuinticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction></DoubleAnimation>
+                      </Storyboard>
+                    </BeginStoryboard>
+                  </Trigger.EnterActions>
+                  <Trigger.ExitActions>
+                    <BeginStoryboard>
+                      <Storyboard>
+                        <DoubleAnimation Storyboard.TargetName="Chrome" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="1" Duration="0:0:0.5"><DoubleAnimation.EasingFunction><QuinticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction></DoubleAnimation>
+                        <DoubleAnimation Storyboard.TargetName="Chrome" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="1" Duration="0:0:0.5"><DoubleAnimation.EasingFunction><QuinticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction></DoubleAnimation>
+                      </Storyboard>
+                    </BeginStoryboard>
+                  </Trigger.ExitActions>
                 </Trigger>
                 <Trigger Property="IsKeyboardFocused" Value="True">
                   <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>

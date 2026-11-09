@@ -68,6 +68,9 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             if (value == ReceiversPage) LoadReceiverProfiles();
         }
     }
+    /// <summary>Whether the streaming page's Advanced section (latency, standby) is open.</summary>
+    public bool StreamingAdvancedExpanded { get => _streamingAdvancedExpanded; set => Set(ref _streamingAdvancedExpanded, value); }
+    private bool _streamingAdvancedExpanded;
     public string[] Pages { get; } = [L.Get("General"), L.Get("AirFlash streaming"), L.Get("Equalizer"), L.Get("Audio capture"), L.Get("Receivers"), L.Get("Monitor"), L.Get("Network"), L.Get("About")];
     public string PageTitle => Pages[Math.Clamp(SelectedPage, 0, Pages.Length - 1)];
     public string PageDescription => new[] { L.Get("Customize startup and appearance"), L.Get("Balance responsiveness and connection stability"), L.Get("Shape the sound sent to all receivers"), L.Get("Choose the audio source to send to HomePod"), L.Get("Manage receivers, connections and per-device settings"), L.Get("Live statistics for the current session"), L.Get("Choose where AirPlay receivers are discovered"), L.Get("Windows audio, wirelessly to HomePod") }[Math.Clamp(SelectedPage, 0, Pages.Length - 1)];
