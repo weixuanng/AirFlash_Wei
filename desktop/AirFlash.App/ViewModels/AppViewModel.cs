@@ -49,6 +49,22 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
     private long _playIntent;
     public bool IsStopping { get; private set; }
     public string Notice { get => _notice; private set { Set(ref _notice, value); Notify(nameof(ErrorDetails)); } }
+    /// <summary>Colour of the status dot: live (green), busy (blue, breathing),
+    /// wait (orange), error (red) or idle (grey).</summary>
+    public string StatusTone => IsStopping ? "busy" : Session.NeedsCleanup ? "error" : _snapshot.State switch
+    {
+        PlaybackState.Connecting or PlaybackState.Pairing => "busy",
+        PlaybackState.Streaming or PlaybackState.Standby => "live",
+        PlaybackState.Preempted => "wait",
+        PlaybackState.Error => "error",
+        _ => "idle"
+    };
+    public bool StatusBusy => StatusTone == "busy";
+    /// <summary>Drives the Dynamic Island style error pop-up at the top of the panel.</summary>
+    public bool IslandActive => EngineFailed || StatusTone == "error";
+    public string IslandTitle => EngineFailed ? L.Get("Could not start the audio engine.") : StatusTitle;
+    public string IslandMessage => EngineFailed ? _engine?.Error ?? "" : ActionHint.Length > 0 ? ActionHint : StatusDetail;
+    private void NotifyIsland() { Notify(nameof(IslandActive)); Notify(nameof(IslandTitle)); Notify(nameof(IslandMessage)); }
     public string StatusTitle => IsStopping ? L.Get("Disconnecting…") : Session.NeedsCleanup ? L.Get("Connection error") : _snapshot.State switch { PlaybackState.Connecting => L.Get("Connecting"), PlaybackState.Streaming => _snapshot.Receiver is { } connected ? L.Format("Connected to {0}", connected.Name) : L.Get("Playing"), PlaybackState.Standby => L.Get("Standby"), PlaybackState.Pairing => L.Get("Pairing"), PlaybackState.Error => L.Get("Connection error"), PlaybackState.Preempted => Session.IsYielding ? (Session.YieldedToOtherDevice ? L.Get("Playing on another device") : L.Get("Waiting for the speaker")) : L.Get("Taken over by another device"), _ => L.Get("Ready") };
     /// <summary>The session owns a receiver: playing, connecting, or quietly
     /// waiting for it after another device took it over.</summary>
@@ -208,7 +224,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
     {
         if (_closing) return;
         if (EngineReady) EngineVersion = _engine!.Version;
-        Notify(nameof(EngineReady)); Notify(nameof(EngineFailed)); Notify(nameof(EngineMessage));
+        Notify(nameof(EngineReady)); Notify(nameof(EngineFailed)); Notify(nameof(EngineMessage)); NotifyIsland();
         RetryEngineCommand.Refresh();
         foreach (var row in Receivers) row.Refresh();
         RefreshPrimary();
@@ -386,12 +402,14 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
     private void ApplySessionSnapshot(SessionSnapshot snapshot)
     {
         if (_closing || !ReferenceEquals(snapshot, Session.Snapshot)) return;
-        var title = StatusTitle; var detail = StatusDetail; var errors = ErrorDetails; var hint = ActionHint;
+        var title = StatusTitle; var tone = StatusTone; var detail = StatusDetail; var errors = ErrorDetails; var hint = ActionHint;
         var previous = _snapshot;
         _snapshot = snapshot;
         if (Session.RequiresManualReconnect) _autoSuppressed = true;
         Notify(nameof(Snapshot));
         if (title != StatusTitle) Notify(nameof(StatusTitle));
+        if (tone != StatusTone) { Notify(nameof(StatusTone)); Notify(nameof(StatusBusy)); }
+        NotifyIsland();
         if (detail != StatusDetail) Notify(nameof(StatusDetail));
         if (errors != ErrorDetails) Notify(nameof(ErrorDetails));
         if (hint != ActionHint) Notify(nameof(ActionHint));
@@ -459,7 +477,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
     }
     private void RefreshStopUi()
     {
-        Notify(nameof(IsStopping)); Notify(nameof(StatusTitle)); Notify(nameof(StatusDetail)); Notify(nameof(CanReconnect));
+        Notify(nameof(IsStopping)); Notify(nameof(StatusTitle)); Notify(nameof(StatusTone)); Notify(nameof(StatusBusy)); NotifyIsland(); Notify(nameof(StatusDetail)); Notify(nameof(CanReconnect));
         StopCommand.Refresh(); ReconnectCommand.Refresh();
         foreach (var row in Receivers) row.Refresh();
         RefreshPrimary();
@@ -630,12 +648,13 @@ public sealed class ReceiverViewModel : ObservableObject
     public bool IsStopping => _app.IsStopping && _app.Snapshot.Receiver?.Id == Receiver.Id;
     public bool NeedsDisconnect => Active || _app.Session.NeedsCleanup && _app.Snapshot.Receiver?.Id == Receiver.Id;
     public bool CanPlay => !_app.IsStopping && !_app.Session.NeedsCleanup && (Active || _app.EngineReady && Receiver.Online && Receiver.Complete);
+    public bool IsStreaming => Active && _app.Snapshot.State == PlaybackState.Streaming;
     public string StateText => (_app.Snapshot.State == PlaybackState.Streaming && Active ? L.Get("Playing")
         : NeedsDisconnect ? _app.StatusTitle
         : !Receiver.Online ? L.Get("Offline") : !Receiver.Complete ? L.Get("Waiting for the other member") : L.Get("Disconnected")) + (Receiver.IsGroup ? $" · {Receiver.Members.Length}/2" : "");
     public void Refresh()
     {
-        var values = new Dictionary<string, object?> { [nameof(IsStopping)] = IsStopping, [nameof(NeedsDisconnect)] = NeedsDisconnect, [nameof(Name)] = Name, [nameof(Detail)] = Detail, [nameof(Active)] = Active, [nameof(CanPlay)] = CanPlay, [nameof(StateText)] = StateText };
+        var values = new Dictionary<string, object?> { [nameof(IsStopping)] = IsStopping, [nameof(NeedsDisconnect)] = NeedsDisconnect, [nameof(Name)] = Name, [nameof(Detail)] = Detail, [nameof(Active)] = Active, [nameof(IsStreaming)] = IsStreaming, [nameof(CanPlay)] = CanPlay, [nameof(StateText)] = StateText };
         foreach (var (name, value) in values)
             if (!_display.TryGetValue(name, out var old) || !Equals(old, value))
             {

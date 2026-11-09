@@ -5,8 +5,11 @@
     <AppExe Condition="'$(AppExe)' == ''">$(MSBuildProjectDirectory)\..\build\wpf-publish\Airplay.exe</AppExe>
     <AppIcon Condition="'$(AppIcon)' == ''">$(MSBuildProjectDirectory)\..\desktop\AirFlash.App\Assets\app.ico</AppIcon>
     <UiLicenseFile Condition="'$(UiLicenseFile)' == ''">$(MSBuildProjectDirectory)\License.rtf</UiLicenseFile>
+    <EngineExe Condition="'$(EngineExe)' == ''">$(MSBuildProjectDirectory)\..\native\airflash-engine\target\release\airflash-engine.exe</EngineExe>
+    <BannerBmp Condition="'$(BannerBmp)' == ''">$(MSBuildProjectDirectory)\Assets\banner.bmp</BannerBmp>
+    <DialogBmp Condition="'$(DialogBmp)' == ''">$(MSBuildProjectDirectory)\Assets\dialog.bmp</DialogBmp>
     <OutputPath Condition="'$(OutputPath)' == ''">$(MSBuildProjectDirectory)\..\dist\</OutputPath>
     <DebugType Condition="'$(DebugType)' == ''">none</DebugType>
-    <DefineConstants>$(DefineConstants);ProductVersion=$(ProductVersion);AppExe=$(AppExe);AppIcon=$(AppIcon);UiLicenseFile=$(UiLicenseFile)</DefineConstants>
+    <DefineConstants>$(DefineConstants);ProductVersion=$(ProductVersion);AppExe=$(AppExe);AppIcon=$(AppIcon);UiLicenseFile=$(UiLicenseFile);EngineExe=$(EngineExe);BannerBmp=$(BannerBmp);DialogBmp=$(DialogBmp)</DefineConstants>
   </PropertyGroup>
 </Project>

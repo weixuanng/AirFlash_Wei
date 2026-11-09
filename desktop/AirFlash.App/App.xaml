@@ -10,19 +10,24 @@
       <ui:InverseBoolVisibilityConverter x:Key="InverseBoolVisibility"/>
       <ui:EqualityConverter x:Key="Equal"/>
       <ui:NonEmptyConverter x:Key="NonEmpty"/>
-      <SolidColorBrush x:Key="CanvasBrush" Color="#F4F6FB"/>
+      <!-- Light defaults; ThemeService replaces these with the matching palette at startup. -->
+      <SolidColorBrush x:Key="CanvasBrush" Color="#F5F5F7"/>
       <SolidColorBrush x:Key="SurfaceBrush" Color="White"/>
-      <SolidColorBrush x:Key="TextBrush" Color="#162239"/>
-      <SolidColorBrush x:Key="MutedBrush" Color="#66748A"/>
-      <SolidColorBrush x:Key="LineBrush" Color="#E0E6F0"/>
-      <SolidColorBrush x:Key="AccentBrush" Color="#2563EB"/>
-      <SolidColorBrush x:Key="TintBrush" Color="#EAF1FF"/>
+      <SolidColorBrush x:Key="TextBrush" Color="#1D1D1F"/>
+      <SolidColorBrush x:Key="MutedBrush" Color="#6E6E73"/>
+      <SolidColorBrush x:Key="LineBrush" Color="#E5E5EA"/>
+      <SolidColorBrush x:Key="AccentBrush" Color="#007AFF"/>
+      <SolidColorBrush x:Key="TintBrush" Color="#E8F1FF"/>
       <SolidColorBrush x:Key="AccentForegroundBrush" Color="#FFFFFF"/>
-      <SolidColorBrush x:Key="CaptionBrush" Color="#EAF1FF"/>
-      <SolidColorBrush x:Key="CaptionTextBrush" Color="#162239"/>
-      <SolidColorBrush x:Key="ErrorBrush" Color="#C32D40"/>
-      <!-- Windows 11's variable UI face first; older systems fall back to Segoe UI. -->
-      <FontFamily x:Key="BodyFont">Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI</FontFamily>
+      <SolidColorBrush x:Key="CaptionBrush" Color="#F5F5F7"/>
+      <SolidColorBrush x:Key="CaptionTextBrush" Color="#1D1D1F"/>
+      <SolidColorBrush x:Key="ErrorBrush" Color="#FF3B30"/>
+      <SolidColorBrush x:Key="SuccessBrush" Color="#34C759"/>
+      <SolidColorBrush x:Key="WarningBrush" Color="#FF9500"/>
+      <!-- SF Pro when it is installed (Apple's licence does not allow shipping it on Windows),
+           otherwise the bundled Inter, then Segoe UI and Microsoft YaHei UI for CJK text. -->
+      <FontFamily x:Key="BodyFont">SF Pro Text, ./Assets/Fonts/#Inter, Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI</FontFamily>
+      <FontFamily x:Key="DisplayFont">SF Pro Display, ./Assets/Fonts/#Inter Display, ./Assets/Fonts/#Inter, Segoe UI Variable Display, Segoe UI, Microsoft YaHei UI</FontFamily>
       <!-- Flat text menus explicitly use body typography, including when opened from an icon. -->
       <Style x:Key="TextMenuItem" TargetType="MenuItem">
         <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
@@ -238,7 +243,7 @@
         <Setter Property="Template">
           <Setter.Value>
             <ControlTemplate TargetType="Button">
-              <Border x:Name="Chrome" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6" Padding="{TemplateBinding Padding}" RenderTransformOrigin="0.5,0.5">
+              <Border x:Name="Chrome" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8" Padding="{TemplateBinding Padding}" RenderTransformOrigin="0.5,0.5">
                 <Border.RenderTransform><ScaleTransform/></Border.RenderTransform>
                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="True"/>
               </Border>
@@ -284,6 +289,9 @@
         <Setter Property="Width" Value="34"/>
         <Setter Property="Height" Value="34"/>
         <Setter Property="Padding" Value="0"/>
+        <!-- Borderless until hovered, like a macOS toolbar glyph. -->
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
         <Setter Property="FontSize" Value="16"/>
         <Setter Property="ToolTipService.ShowDuration" Value="5000"/>
       </Style>
@@ -291,7 +299,7 @@
         <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="CornerRadius" Value="12"/>
         <Setter Property="Padding" Value="18"/>
         <Setter Property="Margin" Value="0,0,0,14"/>
       </Style>

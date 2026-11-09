@@ -1,7 +1,7 @@
 # Airplay icon / 图标维护
 
 The editable master is [app.svg](../desktop/AirFlash.App/Assets/app.svg).
-It preserves the original blue rounded square, two white signal arcs and triangle.
+It is an iOS-blue (#007AFF) rounded square with continuous corners, the curvature-smoothed corner Apple uses for app icons (Figma's corner-smoothing construction at 60 %, radius 14 of 62), with three white level bars that match the panel's now-playing animation.
 Its 64-unit viewBox contains vector paths only; no embedded bitmap, fonts or external assets.
 
 唯一可编辑的母版是上述 SVG，保留原有结构与配色。修改图标时编辑母版，再生成衍生资源，不手工修改 PNG、ICO 或 XAML。

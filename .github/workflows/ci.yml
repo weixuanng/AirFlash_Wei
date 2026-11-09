@@ -57,6 +57,53 @@ jobs:
           $audit = Get-Content artifacts/compatibility/bundle-audit.json -Raw | ConvertFrom-Json
           $audit | Add-Member -NotePropertyName published_exe_sha256 -NotePropertyValue (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant() -Force
           $audit | ConvertTo-Json -Depth 20 | Set-Content artifacts/compatibility/bundle-audit.json -Encoding utf8
+      - name: WPF UI smoke
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path artifacts/compatibility-publish/Airplay.exe).Path
+          $out = Join-Path $PWD 'artifacts/ui-smoke'
+          New-Item $out -ItemType Directory -Force | Out-Null
+          $process = Start-Process $exe -ArgumentList @('--ui-smoke', '--ui-language', 'en-US', '--output', ('"' + "$out/report.json" + '"')) -PassThru
+          if (-not $process.WaitForExit(300000)) { $process.Kill(); throw 'UI smoke timed out.' }
+          if (-not (Test-Path "$out/report.json")) { throw "UI smoke wrote no report (exit $($process.ExitCode))." }
+          $report = Get-Content "$out/report.json" -Raw | ConvertFrom-Json
+          if ($process.ExitCode -ne 0 -or -not $report.ok) { Get-Content "$out/report.json" -Raw; throw 'UI smoke failed.' }
+          Write-Host "UI smoke passed $(@($report.checks).Count) checks."
+      - name: Preserve UI smoke renders
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-smoke-${{ github.sha }}
+          path: artifacts/ui-smoke
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Build MSI
+        shell: pwsh
+        run: |
+          New-Item dist -ItemType Directory -Force | Out-Null
+          Copy-Item artifacts/compatibility-publish/Airplay.exe dist/Airplay.exe
+          ./scripts/build-installer.ps1 -PublishPath artifacts/compatibility-publish -OutputPath dist
+      - name: Installer lifecycle in disposable runner
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/test-installer.ps1
+      - name: Preserve test installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: airplay-test-build-${{ github.sha }}
+          path: |
+            dist/Airplay.exe
+            dist/Airplay-*.msi
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preserve installer logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-test-logs
+          path: artifacts/installer-test/*.log
+          retention-days: 7
       - name: Preserve compatibility audit
         if: always()
         uses: actions/upload-artifact@v4

@@ -30,6 +30,8 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Assets/app.ico" LogicalName="AirFlash.Icon.ico"/>
+    <!-- Inter (SIL OFL 1.1), subset to Latin; the closest open match for SF Pro. -->
+    <Resource Include="Assets/Fonts/*.otf"/>
     <EmbeddedResource Include="../../native/airflash-engine/target/release/airflash-engine.exe" LogicalName="AirFlash.Engine.exe" Condition="Exists('../../native/airflash-engine/target/release/airflash-engine.exe')"/>
   </ItemGroup>
   <Target Name="RequireEngineForPublish" BeforeTargets="PrepareForPublish">

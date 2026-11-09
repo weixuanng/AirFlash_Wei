@@ -16,11 +16,15 @@ internal sealed record ThemePalette(
     Color AccentText,
     Color AccentForeground,
     Color Caption,
-    Color CaptionText)
+    Color CaptionText,
+    Color Success,
+    Color Warning)
 {
+    // Apple system colours: grouped background, label, secondary label,
+    // separator, systemBlue, systemRed, systemGreen and systemOrange.
     public static ThemePalette For(bool dark) => dark
-        ? new(true, ColorOf("#141B27"), ColorOf("#202A3B"), ColorOf("#EEF3FC"), ColorOf("#AEBBD0"), ColorOf("#354157"), ColorOf("#78A9FF"), ColorOf("#253B5C"), ColorOf("#FF9AA5"), ColorOf("#78A9FF"), ColorOf("#162239"), ColorOf("#253B5C"), ColorOf("#EEF3FC"))
-        : new(false, ColorOf("#F4F6FB"), ColorOf("#FFFFFF"), ColorOf("#162239"), ColorOf("#66748A"), ColorOf("#E0E6F0"), ColorOf("#2563EB"), ColorOf("#EAF1FF"), ColorOf("#C32D40"), ColorOf("#2563EB"), ColorOf("#FFFFFF"), ColorOf("#EAF1FF"), ColorOf("#162239"));
+        ? new(true, ColorOf("#1C1C1E"), ColorOf("#2C2C2E"), ColorOf("#F5F5F7"), ColorOf("#98989D"), ColorOf("#3A3A3C"), ColorOf("#0A84FF"), ColorOf("#0F2A47"), ColorOf("#FF453A"), ColorOf("#409CFF"), ColorOf("#FFFFFF"), ColorOf("#1C1C1E"), ColorOf("#F5F5F7"), ColorOf("#30D158"), ColorOf("#FF9F0A"))
+        : new(false, ColorOf("#F5F5F7"), ColorOf("#FFFFFF"), ColorOf("#1D1D1F"), ColorOf("#6E6E73"), ColorOf("#E5E5EA"), ColorOf("#007AFF"), ColorOf("#E8F1FF"), ColorOf("#FF3B30"), ColorOf("#0066CC"), ColorOf("#FFFFFF"), ColorOf("#F5F5F7"), ColorOf("#1D1D1F"), ColorOf("#34C759"), ColorOf("#FF9500"));
 
     private static Color ColorOf(string value) => (Color)ColorConverter.ConvertFromString(value);
 }
@@ -72,6 +76,8 @@ public sealed class ThemeService : IDisposable
         SetBrush("AccentForegroundBrush", palette.AccentForeground);
         SetBrush("CaptionBrush", palette.Caption);
         SetBrush("CaptionTextBrush", palette.CaptionText);
+        SetBrush("SuccessBrush", palette.Success);
+        SetBrush("WarningBrush", palette.Warning);
 
         ApplyFluentResources(palette);
         ThemeChanged?.Invoke(palette);

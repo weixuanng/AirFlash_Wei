@@ -3,8 +3,10 @@
 The installer is built with WiX Toolset 6.0.2.
 
 - `Airplay-X.Y.Z.msi` is a standalone per-machine installer.
-- The MSI installs the self-contained `Airplay.exe` under `Program Files\Airplay`.
-- The standard installer UI lets the user change the install directory and optionally creates desktop and Start menu shortcuts. Both shortcut options are enabled by default.
+- The MSI installs the self-contained `Airplay.exe` under `Program Files\Airplay`, plus a copy of the audio engine (`airflash-engine.exe`) that is byte-identical to the one embedded in the app.
+- The engine gets a Windows Firewall rule, "Airplay audio engine", limited to the local subnet, so HomePods can reach its clock-sync (UDP 319/320) and audio sockets without a firewall prompt. The app runs this installed engine whenever its SHA-256 matches the embedded one; portable runs still extract to `%LOCALAPPDATA%\Airplay\engine\<hash>`, and stale hash folders are removed.
+- The installer UI is one page (licence and Install) with banner and dialog artwork in `installer/Assets`, then a finish page with an "Open Airplay now" checkbox. Desktop and Start menu shortcuts are installed by default; they remain separate features for `ADDLOCAL`/`REMOVE` on the command line.
+- The MSI owns the per-user `Run` entry that starts Airplay with Windows, so uninstall removes it.
 - The installed package appears in Windows Apps and Features and does not require a separate Setup.exe, .NET runtime, Rust runtime, or VC++ Redistributable.
 - New installations require an x64 system and Windows build 17763 or newer. The installer reads `CurrentBuildNumber` from the 64-bit registry view; maintenance and removal remain available for installed products.
 

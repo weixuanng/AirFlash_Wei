@@ -186,8 +186,9 @@ public partial class App : Application
     }
     private static async Task<int> SelfCheckAsync(string[] args)
     {
-        var hello = await QueryHelloAsync(new ProcessEngineFactory(AppPaths.ExtractEngine()));
-        WriteOutput(args, new { ok = true, host = "wpf", version = AppPaths.Version, display_version = AppPaths.DisplayVersion, native = hello });
+        var engine = AppPaths.ExtractEngine();
+        var hello = await QueryHelloAsync(new ProcessEngineFactory(engine));
+        WriteOutput(args, new { ok = true, host = "wpf", version = AppPaths.Version, display_version = AppPaths.DisplayVersion, engine, native = hello });
         return 0;
     }
     private static async Task<int> AudioCheckAsync(string[] args)

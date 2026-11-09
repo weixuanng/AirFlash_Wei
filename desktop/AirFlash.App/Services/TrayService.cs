@@ -129,6 +129,15 @@ public sealed class TrayService : IDisposable
         if (_disposed) return IntPtr.Zero;
         if (_taskbarCreated != 0 && (uint)message == _taskbarCreated) UpdateRetry(_registration.TaskbarCreated());
         if (message is 0x001a or 0x007e or 0x02e0) QueueRefresh();
+        // WM_CLOSE / WM_QUERYENDSESSION: the installer's CloseApplication and Windows sign-out.
+        // After a --startup launch the tray window is the only top-level window, so without
+        // this the default handler would destroy the tray icon and leave the process running.
+        if (message is 0x0010 or 0x0011)
+        {
+            handled = true;
+            System.Windows.Application.Current.Dispatcher.BeginInvoke(_quit);
+            return message == 0x0011 ? new IntPtr(1) : IntPtr.Zero;
+        }
         if ((uint)message == CallbackMessage)
         {
             QueueRefresh();
