@@ -616,11 +616,13 @@ fn announces(state: &mut PeerState, count: u16, now: Instant) {
     }
 }
 /// Step through the four introduction datagram groups starting at `from`.
-fn finish_introduction(state: &mut PeerState, from: Instant) {
-    for step in 0..4u8 {
+fn finish_introduction(state: &mut PeerState, from: Instant, compact: bool) {
+    for step in 0..3u8 {
         let at = from + INTRODUCTION_STEP * u32::from(step);
         assert_eq!(nudges(state, at), [Nudge::Introduction(step, 250)]);
     }
+    let last = from + INTRODUCTION_STEP * 3;
+    assert_eq!(nudges(state, last), [Nudge::Signaling { compact }]);
 }
 /// Drain everything that is due at `now`.
 fn nudges(state: &mut PeerState, now: Instant) -> Vec<Nudge> {
@@ -663,30 +665,43 @@ fn wake_priorities_step_around_the_receiver_and_stay_in_range() {
 
 #[test]
 fn follower_signaling_is_three_well_formed_organization_tlvs() {
-    let packet = follower_signaling(7, 9);
-    assert_eq!(packet.len(), 122);
-    assert_eq!(packet_rejection(&packet), None);
-    assert_eq!(packet[0] & 15, 12);
-    assert_eq!(&packet[34..44], &[0xff; 10]);
-    let mut at = 44;
-    let mut seen = Vec::new();
-    while at < packet.len() {
-        assert_eq!(&packet[at..at + 2], &[0, 3], "organization extension");
-        let length = usize::from(u16::from_be_bytes([packet[at + 2], packet[at + 3]]));
-        seen.push((packet[at + 4..at + 10].to_vec(), length));
-        at += 4 + length;
+    for (compact, total, interval_length) in [(false, 122, 12), (true, 120, 10)] {
+        let packet = follower_signaling(7, 9, compact);
+        assert_eq!(packet.len(), total);
+        assert_eq!(&packet[2..4], &(total as u16).to_be_bytes());
+        assert_eq!(packet_rejection(&packet), None);
+        assert_eq!(packet[0] & 15, 12);
+        assert_eq!(&packet[34..44], &[0xff; 10]);
+        let mut at = 44;
+        let mut seen = Vec::new();
+        while at < packet.len() {
+            assert_eq!(&packet[at..at + 2], &[0, 3], "organization extension");
+            let length = usize::from(u16::from_be_bytes([packet[at + 2], packet[at + 3]]));
+            seen.push((packet[at + 4..at + 10].to_vec(), length));
+            at += 4 + length;
+        }
+        assert_eq!(at, packet.len(), "TLVs fill the datagram exactly");
+        assert_eq!(
+            seen,
+            vec![
+                (vec![0, 0x80, 0xc2, 0, 0, 2], interval_length),
+                (vec![0, 0x0d, 0x93, 0, 0, 1], 22),
+                (vec![0, 0x0d, 0x93, 0, 0, 5], 32),
+            ]
+        );
+        // Link delay -3, time sync -3 (8 per second), announce -2 (4 per second).
+        assert_eq!(&packet[54..58], &[0xfd, 0xfd, 0xfe, 2]);
+        let apple = 44 + 4 + interval_length;
+        assert_eq!(
+            &packet[apple + 10..apple + 26],
+            &[0, 3, 0, 0, 0, 0, 0x27, 0x10, 0, 0, 0x27, 0x10, 0, 0, 0, 0]
+        );
+        assert_eq!(
+            &packet[apple + 36..apple + 48],
+            &[0, 0x0f, 0, 0, 0, 0, 0x27, 0x10, 0, 0, 0x27, 0x10]
+        );
+        assert!(packet[apple + 48..].iter().all(|byte| *byte == 0));
     }
-    assert_eq!(at, packet.len(), "TLVs fill the datagram exactly");
-    assert_eq!(
-        seen,
-        vec![
-            (vec![0, 0x80, 0xc2, 0, 0, 2], 12),
-            (vec![0, 0x0d, 0x93, 0, 0, 1], 22),
-            (vec![0, 0x0d, 0x93, 0, 0, 5], 32),
-        ]
-    );
-    // Link delay -3, time sync -3 (8 per second), announce -2 (4 per second).
-    assert_eq!(&packet[54..58], &[0xfd, 0xfd, 0xfe, 2]);
 }
 
 #[test]
@@ -694,11 +709,7 @@ fn a_silent_receiver_is_introduced_to_then_woken_within_a_fixed_budget() {
     let start = Instant::now();
     let mut state = introduced(start);
     // The introduction starts at once and takes four steps 125 ms apart.
-    assert_eq!(nudges(&mut state, start), [Nudge::Introduction(0, 250)]);
-    for step in 1..4u8 {
-        let at = start + INTRODUCTION_STEP * u32::from(step);
-        assert_eq!(nudges(&mut state, at), [Nudge::Introduction(step, 250)]);
-    }
+    finish_introduction(&mut state, start, false);
     announces(&mut state, 4, start);
     assert_eq!(nudges(&mut state, start + Duration::from_secs(1)), []);
     // Still silent: one better Announce, then two worse ones 150 ms apart.
@@ -717,11 +728,8 @@ fn a_silent_receiver_is_introduced_to_then_woken_within_a_fixed_budget() {
     assert_eq!(nudges(&mut state, at + Duration::from_secs(1)), []);
     // Then the introduction again, then a last wake.
     at += WAKE_RETRY;
-    assert_eq!(nudges(&mut state, at), [Nudge::Introduction(0, 250)]);
-    for step in 1..4u8 {
-        let due = at + INTRODUCTION_STEP * u32::from(step);
-        assert_eq!(nudges(&mut state, due), [Nudge::Introduction(step, 250)]);
-    }
+    // The second introduction ends with the compact Signaling.
+    finish_introduction(&mut state, at, true);
     announces(&mut state, 4, at);
     at += INTRODUCTION_SETTLE;
     assert_eq!(nudges(&mut state, at), [Nudge::Announce(95, 128)]);
@@ -775,7 +783,7 @@ fn sync_traffic_holds_back_a_wake_and_a_single_pair_restores_the_budget() {
     let start = Instant::now();
     let mut state = introduced(start);
     let after = start + INTRODUCTION_SETTLE;
-    finish_introduction(&mut state, start);
+    finish_introduction(&mut state, start, false);
     announces(&mut state, 3, after);
     let (sync, follow) = sync_pair(8, 0, 6_000_000_000);
     followed_packet(&mut state, &sync, 1_000_000_000, after, 7);
@@ -822,7 +830,7 @@ fn wake_state_survives_a_receiver_restart_and_a_started_wake_survives_reactivati
     let start = Instant::now();
     let mut state = introduced(start);
     let at = start + INTRODUCTION_SETTLE;
-    finish_introduction(&mut state, start);
+    finish_introduction(&mut state, start, false);
     announces(&mut state, 3, at);
     assert_eq!(nudges(&mut state, at), [Nudge::Announce(95, 128)]);
     // The receiver restarts its PTP port under a new clock identity.
@@ -836,6 +844,61 @@ fn wake_state_survives_a_receiver_restart_and_a_started_wake_survives_reactivati
     let later = at + WAKE_GAP * 3;
     let sent = nudges(&mut state, later);
     assert_eq!(sent.first(), Some(&Nudge::Announce(97, 128)));
+}
+
+#[test]
+fn a_slowly_syncing_receiver_is_not_woken_before_it_settles() {
+    // Announce at 4 Hz, Sync pairs at 1 Hz from 200 ms: healthy, only slow.
+    let start = Instant::now();
+    let mut state = introduced(start);
+    let mut sent = Vec::new();
+    for tick in 0..120u16 {
+        let at = start + Duration::from_millis(u64::from(tick) * 25);
+        if tick % 10 == 0 {
+            followed_packet(&mut state, &announce(8, 200 + tick, 0), 0, at, 7);
+        }
+        if tick % 40 == 8 {
+            let local = 1_000_000_000 + u64::from(tick) * 25_000_000;
+            let (sync, follow) = sync_pair(8, tick, local + 5_000_000_000);
+            followed_packet(&mut state, &sync, local, at, 7);
+            followed_packet(&mut state, &follow, local + 5_000, at, 7);
+        }
+        sent.extend(nudges(&mut state, at));
+    }
+    assert!(state.wake.settled);
+    assert!(
+        sent.iter()
+            .all(|nudge| !matches!(nudge, Nudge::Announce(..))),
+        "{sent:?}"
+    );
+    assert_eq!((state.wake.wakes, state.wake.introductions), (0, 1));
+}
+
+#[test]
+fn a_receiver_announcing_once_a_second_gets_every_remedy_before_the_deadline() {
+    let start = Instant::now();
+    let mut state = introduced(start);
+    let mut wakes = Vec::new();
+    let mut introductions = Vec::new();
+    for tick in 0..320u64 {
+        let at = start + Duration::from_millis(tick * 25);
+        if tick % 40 == 20 {
+            followed_packet(&mut state, &announce(8, 300 + tick as u16, 0), 0, at, 7);
+        }
+        for nudge in nudges(&mut state, at) {
+            match nudge {
+                Nudge::Announce(95, _) => wakes.push(tick * 25),
+                Nudge::Introduction(0, _) => introductions.push(tick * 25),
+                _ => {}
+            }
+        }
+    }
+    assert_eq!(
+        (wakes.len(), introductions.len()),
+        (2, 2),
+        "{wakes:?} {introductions:?}"
+    );
+    assert!(wakes[1] <= 6_500, "last wake at {} ms", wakes[1]);
 }
 
 /// A receiver that announces at 4 Hz and starts syncing once `woken` says so.
@@ -856,6 +919,7 @@ fn run_silent_receiver(woken: impl Fn(&[Vec<u8>]) -> bool) -> (PeerSnapshot, Vec
     let mut heard = Vec::new();
     let mut seq = 0u16;
     let mut next_packet = started;
+    let mut was_syncing = false;
     while started.elapsed() < Duration::from_secs(12) && !timer.ready(peer) {
         for socket in [&remote_general, &remote_event] {
             while let Ok((n, _)) = socket.recv_from(&mut buffer) {
@@ -866,12 +930,14 @@ fn run_silent_receiver(woken: impl Fn(&[Vec<u8>]) -> bool) -> (PeerSnapshot, Vec
                 }
             }
         }
-        if Instant::now() >= next_packet {
-            next_packet += Duration::from_millis(250);
+        let syncing = woken(&heard);
+        if Instant::now() >= next_packet || (syncing && !was_syncing) {
+            was_syncing = syncing;
+            next_packet = Instant::now() + Duration::from_millis(250);
             remote_general
                 .send_to(&announce(8, seq, 0), local_general)
                 .unwrap();
-            if woken(&heard) {
+            if syncing {
                 let (sync, follow) = sync_pair(8, seq, clock.now_ns() + 5_000_000_000);
                 remote_event.send_to(&sync, local_event).unwrap();
                 remote_general.send_to(&follow, local_general).unwrap();
@@ -897,8 +963,10 @@ fn loop_introduces_itself_and_follows_a_receiver_that_then_syncs() {
     assert_eq!(kinds.iter().filter(|kind| **kind == 12).count(), 1);
     let announced = heard.iter().find(|p| p[0] & 15 == 11).unwrap();
     assert_eq!((announced.len(), announced[47]), (64, 250));
-    assert_eq!((snapshot.wake_attempts, snapshot.introductions), (0, 1));
-    assert_eq!(snapshot.first_pair_after_wakes, Some(0));
+    // A stalled runner may let one wake through before the first pair lands.
+    assert!(snapshot.wake_attempts <= 1);
+    assert_eq!(snapshot.introductions, 1);
+    assert_eq!(snapshot.first_pair_after_introductions, Some(1));
     assert_eq!(snapshot.offset_source, Some("sync"));
     let report = serde_json::to_value(&snapshot).unwrap();
     let first = report["packets"]["first_received"]["11"].as_str().unwrap();

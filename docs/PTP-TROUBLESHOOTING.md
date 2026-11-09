@@ -64,8 +64,10 @@ From 0.2.7 the engine uses two remedies taken from working implementations:
    priority1 one step better than the receiver's, then two Announces one step
    worse, 150 ms apart.
 
-If the clock stays silent the engine repeats the introduction after 2 s and
-wakes once more 1.5 s after that, then stops. A single complete pair restores
+If the clock stays silent the engine repeats the introduction after 2 s, this
+time with the message-interval request encoded without its two reserved bytes,
+and wakes once more 1.5 s after that, then stops. Silence means three Announces
+and no Sync or Follow_Up for 1.5 s, so a receiver that syncs slowly is not woken. A single complete pair restores
 that budget; once three exchanges have made the clock usable it is never nudged
 again for that session, so a streaming receiver is left alone.
 

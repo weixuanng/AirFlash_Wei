@@ -195,18 +195,24 @@ fn wake_priorities(remote: BmcaDataset) -> ((u8, u8), (u8, u8)) {
 }
 /// The Signaling a Mac sends when it joins as a clock that will follow: an
 /// 802.1AS message-interval request (Sync 8 per second, Announce 4 per second)
-/// and the two Apple extension TLVs that accompany it.
-pub fn follower_signaling(clock: u64, seq: u16) -> Vec<u8> {
-    let mut p = header(12, 122, clock, seq, 0x0408, -128);
+/// and the two Apple extension TLVs that accompany it. `compact` omits the
+/// request's two reserved bytes, the encoding one working sender uses.
+pub fn follower_signaling(clock: u64, seq: u16, compact: bool) -> Vec<u8> {
+    let mut body = vec![0xff; 10];
+    body.extend([0, 3, 0, if compact { 10 } else { 12 }]);
+    body.extend([0, 0x80, 0xc2, 0, 0, 2, 0xfd, 0xfd, 0xfe, 2]);
+    if !compact {
+        body.extend([0, 0]);
+    }
+    for (subtype, length, kind) in [(1u8, 22u8, 3u8), (5, 32, 0x0f)] {
+        let start = body.len();
+        body.extend([0, 3, 0, length, 0, 0x0d, 0x93, 0, 0, subtype, 0, kind]);
+        body.extend([0, 0, 0, 0, 0x27, 0x10, 0, 0, 0x27, 0x10]);
+        body.resize(start + 4 + usize::from(length), 0);
+    }
+    let mut p = header(12, 34 + body.len(), clock, seq, 0x0408, -128);
     p[32] = 5;
-    p[34..44].fill(0xff);
-    p[44..60].copy_from_slice(&[
-        0, 3, 0, 12, 0, 0x80, 0xc2, 0, 0, 2, 0xfd, 0xfd, 0xfe, 2, 0, 0,
-    ]);
-    p[60..76].copy_from_slice(&[0, 3, 0, 22, 0, 0x0d, 0x93, 0, 0, 1, 0, 3, 0, 0, 0, 0]);
-    p[76..82].copy_from_slice(&[0x27, 0x10, 0, 0, 0x27, 0x10]);
-    p[86..102].copy_from_slice(&[0, 3, 0, 32, 0, 0x0d, 0x93, 0, 0, 5, 0, 0x0f, 0, 0, 0, 0]);
-    p[102..108].copy_from_slice(&[0x27, 0x10, 0, 0, 0x27, 0x10]);
+    p[34..].copy_from_slice(&body);
     p
 }
 pub fn sync_pair(clock: u64, seq: u16, ns: u64) -> (Vec<u8>, Vec<u8>) {
@@ -302,8 +308,11 @@ struct WakeState {
     /// Worse Announces that close a wake: when the next is due, its priorities
     /// and how many remain.
     closing: Option<(Instant, u8, u8, u8)>,
-    /// The next introduction step and when it is due.
-    introduction: Option<(Instant, u8)>,
+    /// The next introduction step, when it is due, and whether this
+    /// introduction ends with the compact Signaling.
+    introduction: Option<(Instant, u8, bool)>,
+    /// When Sync or Follow_Up last arrived from the receiver.
+    last_sync: Option<Instant>,
     /// The receiver has delivered a usable clock; it is left alone from then on.
     settled: bool,
     /// Time from activation to the first complete pair, and the wakes and
@@ -315,8 +324,11 @@ struct WakeState {
 enum Nudge {
     /// A bare Announce with these priorities.
     Announce(u8, u8),
-    /// Introduction step 0-3, with the priority1 to announce.
+    /// Introduction step 0-2 (Sync and Follow_Up, with an Announce on the
+    /// first two), with the priority1 to announce.
     Introduction(u8, u8),
+    /// The Signaling that ends an introduction.
+    Signaling { compact: bool },
 }
 const WAKE_AFTER_ANNOUNCES: u32 = 3;
 const WAKE_ESCALATIONS: u8 = 3;
@@ -563,7 +575,9 @@ impl PeerState {
             introductions: self.wake.introductions + u64::from(self.follow),
             announces_naming_us: self.wake.announces_naming_us,
             closing: self.wake.closing,
-            introduction: self.follow.then_some((now, 0)),
+            last_sync: self.wake.last_sync,
+            settled: self.wake.settled && self.ready(now),
+            introduction: self.follow.then_some((now, 0, false)),
             next: Some(now + INTRODUCTION_SETTLE),
             ..Default::default()
         };
@@ -591,25 +605,35 @@ impl PeerState {
             Some(remote) if remote.priority1 >= INTRODUCTION_PRIORITY1 => 255,
             _ => INTRODUCTION_PRIORITY1,
         };
-        if let Some((due, step)) = self.wake.introduction {
+        if let Some((due, step, compact)) = self.wake.introduction {
             if now < due {
                 return None;
             }
-            self.wake.introduction = (step < 3).then(|| (now + INTRODUCTION_STEP, step + 1));
-            return Some(Nudge::Introduction(step, introduction_priority));
+            self.wake.introduction =
+                (step < 3).then(|| (now + INTRODUCTION_STEP, step + 1, compact));
+            return Some(if step < 3 {
+                Nudge::Introduction(step, introduction_priority)
+            } else {
+                Nudge::Signaling { compact }
+            });
         }
         let remote = self.bmca?;
+        // Silence is judged by time as well as by Announces, so a receiver
+        // that syncs slowly is not woken and one that announces slowly is.
         if self.wake.announces_without_sync < WAKE_AFTER_ANNOUNCES
             || self.wake.attempts >= WAKE_ESCALATIONS
             || self.wake.next.is_some_and(|at| now < at)
+            || self
+                .wake
+                .last_sync
+                .is_some_and(|at| now.saturating_duration_since(at) < INTRODUCTION_SETTLE)
         {
             return None;
         }
         self.wake.attempts += 1;
-        self.wake.announces_without_sync = 0;
         if self.wake.attempts == 2 {
             self.wake.introductions += 1;
-            self.wake.introduction = Some((now + INTRODUCTION_STEP, 1));
+            self.wake.introduction = Some((now + INTRODUCTION_STEP, 1, true));
             self.wake.next = Some(now + INTRODUCTION_SETTLE);
             return Some(Nudge::Introduction(0, introduction_priority));
         }
@@ -930,6 +954,7 @@ fn followed_packet(s: &mut PeerState, data: &[u8], local_ns: u64, now: Instant, 
     }
     if (kind == 0 || kind == 8) && data.len() >= 44 {
         s.wake.announces_without_sync = 0;
+        s.wake.last_sync = Some(now);
         s.remember_sync(data, local_ns, now);
     }
     if kind == 9
@@ -1445,8 +1470,8 @@ fn ptp_loop(
                     let packet = announce(priority1, priority2);
                     send_ptp(general, &packet, (*peer, 320).into(), s, "wake_announce");
                 }
-                Nudge::Introduction(3, _) => {
-                    let packet = follower_signaling(clock_id, nudge_seq);
+                Nudge::Signaling { compact } => {
+                    let packet = follower_signaling(clock_id, nudge_seq, compact);
                     send_ptp(general, &packet, (*peer, 320).into(), s, "introduction");
                 }
                 Nudge::Introduction(step, priority1) => {
@@ -1593,7 +1618,8 @@ fn ptp_loop(
                     continue;
                 }
                 // An Announce naming this engine is an echo of a wake, not a restart.
-                let names_us = kind == 11 && n >= 61 && buf[53..61] == clock_id.to_be_bytes();
+                let names_us =
+                    s.follow && kind == 11 && n >= 64 && buf[53..61] == clock_id.to_be_bytes();
                 if kind == 11 && !names_us {
                     note_announce_identity(s, &buf[..n], received_at);
                 }
