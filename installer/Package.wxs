@@ -2,27 +2,27 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
      xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
-  <Package Name="AirFlash"
-           Manufacturer="AirFlash"
+  <Package Name="Airplay"
+           Manufacturer="Airplay"
            Version="$(var.ProductVersion)"
            UpgradeCode="{E9C2A5B0-6A5F-4D4C-9B9F-8F3E1A56A1D3}"
            Scope="perMachine"
            Compressed="yes">
-    <SummaryInformation Description="Windows system audio to AirFlash receivers"/>
-    <MajorUpgrade Schedule="afterInstallInitialize" DowngradeErrorMessage="A newer version of AirFlash is already installed."/>
+    <SummaryInformation Description="Windows system audio to AirPlay receivers"/>
+    <MajorUpgrade Schedule="afterInstallInitialize" DowngradeErrorMessage="A newer version of Airplay is already installed."/>
     <MediaTemplate EmbedCab="yes"/>
     <util:CloseApplication Id="CloseRunningApplication"
-                           Target="AirFlash.exe"
+                           Target="Airplay.exe"
                            CloseMessage="yes"
                            EndSessionMessage="yes"
                            Timeout="10"
-                           Property="AIRFLASH_STILL_RUNNING"
+                           Property="AIRPLAY_STILL_RUNNING"
                            RebootPrompt="no"/>
-    <CustomAction Id="RequireAirFlashExited"
-                  Error="AirFlash could not exit. Close AirFlash, then retry installation or removal."/>
+    <CustomAction Id="RequireAirplayExited"
+                  Error="Airplay could not exit. Close Airplay, then retry installation or removal."/>
     <InstallExecuteSequence>
-      <Custom Action="override Wix4CloseApplications_X64" Before="RequireAirFlashExited"/>
-      <Custom Action="RequireAirFlashExited" Before="InstallValidate" Condition="AIRFLASH_STILL_RUNNING"/>
+      <Custom Action="override Wix4CloseApplications_X64" Before="RequireAirplayExited"/>
+      <Custom Action="RequireAirplayExited" Before="InstallValidate" Condition="AIRPLAY_STILL_RUNNING"/>
     </InstallExecuteSequence>
     <SetProperty Id="REINSTALLMODE" Value="amus" Before="CostInitialize" Sequence="both"/>
     <SetProperty Id="ARPINSTALLLOCATION" Value="[INSTALLFOLDER]" After="CostFinalize" Sequence="execute"/>
@@ -32,25 +32,25 @@
     <WixVariable Id="WixUILicenseRtf" Value="$(var.UiLicenseFile)"/>
     <ui:WixUI Id="WixUI_FeatureTree"/>
 
-    <Property Id="AIRFLASH_OS_BUILD">
+    <Property Id="AIRPLAY_OS_BUILD">
       <RegistrySearch Id="ReadWindowsBuild" Root="HKLM" Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion" Name="CurrentBuildNumber" Type="raw" Bitness="always64"/>
     </Property>
-    <Property Id="AIRFLASH_OS_ARCH">
+    <Property Id="AIRPLAY_OS_ARCH">
       <RegistrySearch Id="ReadWindowsArchitecture" Root="HKLM" Key="SYSTEM\CurrentControlSet\Control\Session Manager\Environment" Name="PROCESSOR_ARCHITECTURE" Type="raw" Bitness="always64"/>
     </Property>
-    <Launch Condition="Installed OR (VersionNT64 AND AIRFLASH_OS_ARCH = &quot;AMD64&quot; AND AIRFLASH_OS_BUILD &gt;= 17763)" Message="Windows 10 version 1809 (build 17763) or later on an x64 system is required."/>
+    <Launch Condition="Installed OR (VersionNT64 AND AIRPLAY_OS_ARCH = &quot;AMD64&quot; AND AIRPLAY_OS_BUILD &gt;= 17763)" Message="Windows 10 version 1809 (build 17763) or later on an x64 system is required."/>
 
     <StandardDirectory Id="ProgramFiles64Folder">
-      <Directory Id="INSTALLFOLDER" Name="AirFlash"/>
+      <Directory Id="INSTALLFOLDER" Name="Airplay"/>
     </StandardDirectory>
 
     <StandardDirectory Id="ProgramMenuFolder">
-      <Directory Id="AirFlashProgramsFolder" Name="AirFlash"/>
+      <Directory Id="AirplayProgramsFolder" Name="Airplay"/>
     </StandardDirectory>
 
     <DirectoryRef Id="INSTALLFOLDER">
       <Component Id="ApplicationComponent" Guid="{B5DB5EE1-5BF1-48ED-AF69-1324D9DE4A09}">
-        <RemoveFile Id="ReplaceApplicationExe" Name="AirFlash.exe" On="install"/>
+        <RemoveFile Id="ReplaceApplicationExe" Name="Airplay.exe" On="install"/>
         <RemoveFolder Id="RemoveInstallFolder" On="uninstall"/>
         <File Id="ApplicationExe"
               Source="$(var.AppExe)"
@@ -62,13 +62,13 @@
     <StandardDirectory Id="DesktopFolder">
       <Component Id="DesktopShortcutComponent" Guid="{A4F96A74-C925-4BB9-8C80-7A4BA9AE2024}">
         <Shortcut Id="DesktopShortcut"
-                  Name="AirFlash"
-                  Description="Send Windows system audio to an AirFlash receiver"
-                  Target="[INSTALLFOLDER]AirFlash.exe"
+                  Name="Airplay"
+                  Description="Send Windows system audio to an AirPlay receiver"
+                  Target="[INSTALLFOLDER]Airplay.exe"
                   Icon="ApplicationIcon" IconIndex="0"
                   WorkingDirectory="INSTALLFOLDER"/>
         <RegistryValue Root="HKCU"
-                       Key="Software\AirFlash"
+                       Key="Software\Airplay"
                        Name="DesktopShortcut"
                        Type="integer"
                        Value="1"
@@ -76,17 +76,17 @@
       </Component>
     </StandardDirectory>
 
-    <DirectoryRef Id="AirFlashProgramsFolder">
+    <DirectoryRef Id="AirplayProgramsFolder">
       <Component Id="StartMenuShortcutComponent" Guid="{6BDBB7C5-9207-44C5-9A8A-C8B5544D6F8A}">
         <Shortcut Id="StartMenuShortcut"
-                  Name="AirFlash"
-                  Description="Send Windows system audio to an AirFlash receiver"
-                  Target="[INSTALLFOLDER]AirFlash.exe"
+                  Name="Airplay"
+                  Description="Send Windows system audio to an AirPlay receiver"
+                  Target="[INSTALLFOLDER]Airplay.exe"
                   Icon="ApplicationIcon" IconIndex="0"
                   WorkingDirectory="INSTALLFOLDER"/>
         <RemoveFolder Id="RemoveStartMenuFolder" On="uninstall"/>
         <RegistryValue Root="HKCU"
-                       Key="Software\AirFlash"
+                       Key="Software\Airplay"
                        Name="StartMenuShortcut"
                        Type="integer"
                        Value="1"
@@ -95,15 +95,15 @@
     </DirectoryRef>
 
     <Feature Id="MainFeature"
-             Title="AirFlash"
-             Description="AirFlash application"
+             Title="Airplay"
+             Description="Airplay application"
              Level="1"
              AllowAbsent="no"
              ConfigurableDirectory="INSTALLFOLDER">
       <ComponentRef Id="ApplicationComponent"/>
       <Feature Id="DesktopShortcutFeature"
                Title="Desktop shortcut"
-               Description="Create an AirFlash shortcut on the desktop"
+               Description="Create an Airplay shortcut on the desktop"
                Level="1"
                AllowAbsent="yes"
                InstallDefault="local">
@@ -111,7 +111,7 @@
       </Feature>
       <Feature Id="StartMenuShortcutFeature"
                Title="Start menu shortcut"
-               Description="Create an AirFlash shortcut in the Start menu"
+               Description="Create an Airplay shortcut in the Start menu"
                Level="1"
                AllowAbsent="yes"
                InstallDefault="local">

@@ -14,7 +14,7 @@ $releaseLock = [IO.File]::Open((Join-Path $repoRoot 'artifacts/release.lock'), '
 try {
     . (Join-Path $PSScriptRoot 'release-version.ps1')
     $releaseVersion = Reserve-ReleaseVersion $repoRoot $ReservedVersion $ReleaseChannel -NewVersion $NewVersion
-    Write-Host "Building AirFlash $releaseVersion"
+    Write-Host "Building Airplay $releaseVersion"
     $informationalVersion = if ($ReleaseChannel -eq 'preview') { "$releaseVersion-rc.1" } else { $releaseVersion }
     New-AirFlashPackage -Context $dotnetContext -Version $releaseVersion -InformationalVersion $informationalVersion `
         -BuildDirectory (Join-Path $repoRoot 'build') -OutputDirectory (Join-Path $repoRoot 'dist') `

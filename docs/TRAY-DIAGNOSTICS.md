@@ -10,7 +10,7 @@ Registration now tries the existing GUID first, then HWND/icon-ID identity if th
 
 ## Diagnose an affected machine
 
-First check the taskbar's overflow menu: an icon placed there is registered, even when it is not visible directly beside the clock. Logs under `%APPDATA%\AirFlash\logs\wpf-YYYY-MM-DD.log` now contain `Tray path=...` entries with operation, identity and success. Look for:
+First check the taskbar's overflow menu: an icon placed there is registered, even when it is not visible directly beside the clock. Logs under `%APPDATA%\Airplay\logs\wpf-YYYY-MM-DD.log` now contain `Tray path=...` entries with operation, identity and success. Look for:
 
 - `LoadEmbeddedIcon`: whether the DPI-aware application icon was loaded; `ExtractIconEx` records executable small/large handles if fallback was necessary.
 - `Add identity=Guid success=False` followed by successful `Add identity=WindowIconId`: GUID registration failed and the fallback recovered.
@@ -21,8 +21,8 @@ First check the taskbar's overflow menu: an icon placed there is registered, eve
 
 ## Isolated Windows desktop verification
 
-Run `pwsh scripts/test-tray.ps1` against the freshly published `dist/AirFlash.exe`. The script copies the application to two new artifact directories, uses one fresh verification GUID, and runs English/Chinese tray checks. It also exercises native HWND/icon-ID identity explicitly, regardless of whether that Windows version rejects a directory move. Add `-RequirePathRejection` only when testing an environment expected to reproduce the documented GUID restriction. Reports distinguish observed rejection from explicitly selected window identity.
+Run `pwsh scripts/test-tray.ps1` against the freshly published `dist/Airplay.exe`. The script copies the application to two new artifact directories, uses one fresh verification GUID, and runs English/Chinese tray checks. It also exercises native HWND/icon-ID identity explicitly, regardless of whether that Windows version rejects a directory move. Add `-RequirePathRejection` only when testing an environment expected to reproduce the documented GUID restriction. Reports distinguish observed rejection from explicitly selected window identity.
 
-The underlying `--tray-smoke` mode verifies real registration/geometry, callbacks, menu actions, deletion and language-window reconstruction with simulated audio, discovery, autostart and engine services. `--tray-guid` must use a test GUID; the production GUID is rejected. `--tray-window-id` selects native window identity for verification only. Full `--ui-smoke` includes these tray checks and always isolates its GUID.
+The underlying `--tray-smoke` mode verifies real registration/geometry, callbacks, menu actions, deletion and language-window reconstruction with simulated audio, discovery, autostart and engine services. The tray right-click menu contains only Check for updates, About Airplay and Quit; there is no Settings entry and no per-device action in the menu. `--tray-guid` must use a test GUID; the production GUID is rejected. `--tray-window-id` selects native window identity for verification only. Full `--ui-smoke` includes these tray checks and always isolates its GUID.
 
 Use a disposable Windows desktop when reproducing shell lifecycle problems. Tests do not clear production tray caches, change taskbar preferences or restart the user's Explorer process. Mock-Shell unit tests cover registration failures, identity consistency, retry recovery, Explorer reconstruction, default callbacks and disposal. Headless CI cannot substitute for desktop tray checks.

@@ -50,7 +50,7 @@ function Package([string]$Stage, [string]$Payload, [switch]$Explicit) {
     if ($Explicit) { $parameters += @('-DotnetPath', $dotnet) }
     & (Join-Path $PSHOME 'pwsh.exe') -NoProfile -NonInteractive -File (Join-Path $fixture 'scripts/build-installer.ps1') @parameters *> (Join-Path $directory "$Stage-build.log")
     if ($LASTEXITCODE -ne 0) { throw "$Stage packaging failed; see $Stage-build.log." }
-    $msi = @(Get-ChildItem -LiteralPath $output -Filter 'AirFlash-*.msi' -File)
+    $msi = @(Get-ChildItem -LiteralPath $output -Filter 'Airplay-*.msi' -File)
     if ($msi.Count -ne 1) { throw "$Stage did not produce exactly one package." }
     $msi = $msi[0].FullName; $msiHash = Hash $msi
     $table = Read-PayloadTable $msi
@@ -89,11 +89,11 @@ try {
     $env:DOTNET_CLI_HOME = Join-Path $directory 'dotnet-home'; $env:NUGET_PACKAGES = $nuget
     $env:DOTNET_GENERATE_ASPNET_CERTIFICATE = 'false'
     foreach ($name in @('A', 'B')) {
-        $path = Join-Path $directory "publish-$name/AirFlash.exe"
+        $path = Join-Path $directory "publish-$name/Airplay.exe"
         New-Item -ItemType Directory -Path (Split-Path $path -Parent) -Force | Out-Null
         Copy-Item -LiteralPath $published -Destination $path
         $stream = [IO.File]::Open($path, [IO.FileMode]::Append, [IO.FileAccess]::Write)
-        try { $bytes = [Text.Encoding]::ASCII.GetBytes("AirFlash packaging fixture $name`n" + ($name * $(if ($name -eq 'A') { 64 } else { 192 }))); $stream.Write($bytes, 0, $bytes.Length) }
+        try { $bytes = [Text.Encoding]::ASCII.GetBytes("Airplay packaging fixture $name`n" + ($name * $(if ($name -eq 'A') { 64 } else { 192 }))); $stream.Write($bytes, 0, $bytes.Length) }
         finally { $stream.Dispose() }
         [IO.File]::SetLastWriteTimeUtc($path, [DateTime]::new(2000, 1, 1, 0, 0, 0, [DateTimeKind]::Utc))
         $payloads += [pscustomobject]@{ path = $path; hash = Hash $path; version = [Diagnostics.FileVersionInfo]::GetVersionInfo($path).FileVersion }

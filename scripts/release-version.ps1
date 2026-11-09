@@ -26,7 +26,7 @@ function Reserve-ReleaseVersion([string]$Root, [string]$RequestedVersion = '', [
     $versions += [Version]($project.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1)
     $statePath = Join-Path $Root 'artifacts/release-version.txt'
     if (Test-Path $statePath) { $versions += [Version](Get-Content $statePath -Raw).Trim() }
-    $previousExe = Join-Path $Root 'dist/AirFlash.exe'
+    $previousExe = Join-Path $Root 'dist/Airplay.exe'
     if (Test-Path $previousExe) {
         $info = [Diagnostics.FileVersionInfo]::GetVersionInfo($previousExe)
         $versions += [Version]('{0}.{1}.{2}' -f $info.FileMajorPart, $info.FileMinorPart, $info.FileBuildPart)

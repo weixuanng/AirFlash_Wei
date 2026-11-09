@@ -126,7 +126,7 @@ Clippy、Ruff 和桌面构建通过。Windows 兼容性静态审查通过，但�
 不替代网络干扰、真实设备和 30 分钟默认 soak。
 
 可运行 `scripts/build-native.ps1 -Check`、.NET tests、Python pytest/Ruff。
-隔离 WPF 回归使用 `AirFlash.exe --ui-smoke --ui-regression --output <report.json>`，
+隔离 WPF 回归使用 `Airplay.exe --ui-smoke --output <report.json>`，
 全部网络、音频、开机启动服务为模拟；完整 `--ui-smoke` 另包含真实系统托盘检查。
 生成报告与渲染图位于指定报告目录。高负载 soak 可设
 `AIRFLASH_SOAK_SECONDS=600`、`AIRFLASH_SOAK_LOAD_THREADS=4` 后运行 ignored `soak` test。

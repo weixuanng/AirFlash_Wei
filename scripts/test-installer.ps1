@@ -5,22 +5,22 @@ $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 Set-Location $root
 . (Join-Path $PSScriptRoot 'installer-test-common.ps1')
 function Find-Msi([string]$Directory) {
-    $packages = @(Get-ChildItem -LiteralPath $Directory -Filter 'AirFlash*.msi' -File)
-    if ($packages.Count -ne 1) { throw "Expected exactly one AirFlash MSI in $Directory; found $($packages.Count)." }
+    $packages = @(Get-ChildItem -LiteralPath $Directory -Filter 'Airplay*.msi' -File)
+    if ($packages.Count -ne 1) { throw "Expected exactly one Airplay MSI in $Directory; found $($packages.Count)." }
     return $packages[0].FullName
 }
 $msi = Find-Msi 'dist'
-$exeHash = (Get-FileHash dist/AirFlash.exe).Hash
+$exeHash = (Get-FileHash dist/Airplay.exe).Hash
 $msiHash = (Get-FileHash $msi).Hash
 # Resolve the predecessor before touching user data or installing any package.
 $releases = gh api repos/Ding-Kyoma/AirFlash/releases | ConvertFrom-Json
 if ($LASTEXITCODE) { throw 'Cannot inspect preceding releases.' }
-$fileInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path dist/AirFlash.exe))
+$fileInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path dist/Airplay.exe))
 $current = [Version]('{0}.{1}.{2}' -f $fileInfo.FileMajorPart,$fileInfo.FileMinorPart,$fileInfo.FileBuildPart)
 $previous = Select-AirFlashInstallerPredecessor -Releases $releases -CurrentVersion $current
 $fixtureVersion = if (-not $previous) { Get-AirFlashInstallerFixtureVersion -CurrentVersion $current }
-$installed = Join-Path $env:ProgramFiles 'AirFlash/AirFlash.exe'
-$data = Join-Path $env:APPDATA 'AirFlash'
+$installed = Join-Path $env:ProgramFiles 'Airplay/Airplay.exe'
+$data = Join-Path $env:APPDATA 'Airplay'
 New-Item $data -ItemType Directory -Force | Out-Null
 $sentinel = Join-Path $data 'release-test-sentinel.txt'
 Set-Content $sentinel 'preserve-user-data'
@@ -31,7 +31,7 @@ function Run-Msi([string[]]$Arguments, [string]$Name) {
     if ($process.ExitCode -notin @(0,3010)) { Get-Content $log -Tail 60; throw "MSI $Name failed: $($process.ExitCode)" }
 }
 function Entries {
-    @(Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue | Where-Object DisplayName -EQ 'AirFlash')
+    @(Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue | Where-Object DisplayName -EQ 'Airplay')
 }
 function Check-Installed {
     if (@(Entries).Count -ne 1) { throw 'Expected exactly one uninstall entry.' }
@@ -59,10 +59,10 @@ if ($previous) {
     foreach ($file in @('AirFlash.Package.wixproj','Installer.props','Package.wxs','License.rtf')) {
         Copy-Item (Join-Path $root "installer/$file") (Join-Path $fixtureProject $file)
     }
-    & ./scripts/dotnet.ps1 build (Join-Path $fixtureProject 'AirFlash.Package.wixproj') -c Release "-p:ProductVersion=$fixtureVersion" "-p:AppExe=$root/dist/AirFlash.exe" "-p:AppIcon=$root/desktop/AirFlash.App/Assets/app.ico" "-p:UiLicenseFile=$root/installer/License.rtf" "-p:OutputPath=$oldDir/" '-p:DebugType=none'
+    & ./scripts/dotnet.ps1 build (Join-Path $fixtureProject 'AirFlash.Package.wixproj') -c Release "-p:ProductVersion=$fixtureVersion" "-p:AppExe=$root/dist/Airplay.exe" "-p:AppIcon=$root/desktop/AirFlash.App/Assets/app.ico" "-p:UiLicenseFile=$root/installer/License.rtf" "-p:OutputPath=$oldDir/" '-p:DebugType=none'
     if ($LASTEXITCODE) { throw 'Cannot build upgrade fixture.' }
 }
-if ((Get-FileHash $msi).Hash -ne $msiHash -or (Get-FileHash dist/AirFlash.exe).Hash -ne $exeHash) { throw 'Fixture build changed release assets.' }
+if ((Get-FileHash $msi).Hash -ne $msiHash -or (Get-FileHash dist/Airplay.exe).Hash -ne $exeHash) { throw 'Fixture build changed release assets.' }
 $oldMsi = Find-Msi $oldDir
 Run-Msi @('/i',"`"$oldMsi`"") 'old-install'
 $oldCode = (Entries).PSChildName
@@ -92,7 +92,7 @@ if ($env:RELEASE_CHANNEL -eq 'stable') {
     }
 }
 foreach ($folder in @([Environment]::GetFolderPath('Desktop'),[Environment]::GetFolderPath('CommonDesktopDirectory'),[Environment]::GetFolderPath('Programs'),[Environment]::GetFolderPath('CommonPrograms'))) {
-    if (Get-ChildItem $folder -Filter AirFlash.lnk -Recurse -ErrorAction SilentlyContinue) { throw 'Uninstall left a shortcut.' }
+    if (Get-ChildItem $folder -Filter Airplay.lnk -Recurse -ErrorAction SilentlyContinue) { throw 'Uninstall left a shortcut.' }
 }
 if ((Get-Content $sentinel -Raw).Trim() -ne 'preserve-user-data') { throw 'User data changed.' }
 if ((Get-FileHash $msi).Hash -ne $msiHash) { throw 'Installer tests changed release MSI.' }

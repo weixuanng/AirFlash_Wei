@@ -1,4 +1,4 @@
-# AirFlash icon / 图标维护
+# Airplay icon / 图标维护
 
 The editable master is [app.svg](../desktop/AirFlash.App/Assets/app.svg).
 It preserves the original blue rounded square, two white signal arcs and triangle.
@@ -44,9 +44,9 @@ Settings, receiver speaker, play and stop icons are application-owned `Geometry`
 
 ```powershell
 pwsh scripts/dotnet.ps1 test AirFlash.sln '-p:RestoreLockedMode=true'
-# Run the built AirFlash.exe with isolated mock services:
-AirFlash.exe --ui-smoke --ui-language en-US --output artifacts/icon-smoke-en/report.json
-AirFlash.exe --ui-smoke --ui-language zh-CN --output artifacts/icon-smoke-zh/report.json
+# Run the built Airplay.exe with isolated mock services:
+Airplay.exe --ui-smoke --ui-language en-US --output artifacts/icon-smoke-en/report.json
+Airplay.exe --ui-smoke --ui-language zh-CN --output artifacts/icon-smoke-zh/report.json
 ```
 
 UI smoke checks native HICON dimensions, window and tray handles, notification-driven tray refresh and simulated Explorer re-registration. It renders the panel and an icon comparison sheet at **100%, 125%, 150%, 175%, 200%** in both themes. Reports include the actual window DPI and monitor work area. Mock engine/audio/discovery/autostart services do not access HomePods or alter system audio.
@@ -57,7 +57,7 @@ Physical acceptance on **3440×1440 at 125%**:
 
 1. Check the tray, settings window taskbar icon and title bar, desktop shortcut, Start menu shortcut, and large Explorer icons.
 2. Check blue/white shapes and edges in light and dark Windows themes; compare the vector with the original design.
-3. Change scaling between 100%, 125%, 150%, 175%, 200%, and move settings between monitors of different DPI. Icons should update without restarting AirFlash.
+3. Change scaling between 100%, 125%, 150%, 175%, 200%, and move settings between monitors of different DPI. Icons should update without restarting Airplay.
 4. Restart Explorer during an approved test session. The tray icon should return once, with clicks and its context menu working.
 5. Check the MSI's Apps and Features icon and installed shortcuts in a disposable Windows environment.
 

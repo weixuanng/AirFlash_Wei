@@ -7,7 +7,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $exe = (Resolve-Path -LiteralPath $Executable).Path
 $root = [IO.Path]::GetFullPath($OutputDirectory)
-$directory = Join-Path $root ('AirFlash-diagnostics-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [Guid]::NewGuid().ToString('N').Substring(0,8))
+$directory = Join-Path $root ('Airplay-diagnostics-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [Guid]::NewGuid().ToString('N').Substring(0,8))
 New-Item -ItemType Directory -Path $directory -Force | Out-Null
 $started = Get-Date
 function Protect-Text([string]$Text) {
@@ -104,7 +104,7 @@ try {
         [IO.File]::WriteAllText((Join-Path $directory 'startup-log.txt'), (Read-Bounded $logFile), (New-Object Text.UTF8Encoding($false)))
     }
     $events = @(Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = $started; Id = @(1000,1001,1026) } -MaxEvents 30 -ErrorAction SilentlyContinue |
-        Where-Object { $_.Message -match 'AirFlash|airflash-engine' } |
+        Where-Object { $_.Message -match 'Airplay|airflash-engine' } |
         ForEach-Object { @{ time_utc = $_.TimeCreated.ToUniversalTime().ToString('o'); id = $_.Id; provider = $_.ProviderName; message = (Protect-Text $_.Message) } })
     $report.events = $events
 } catch { $report.diagnostics_error += Protect-Text $_.Exception.Message }
