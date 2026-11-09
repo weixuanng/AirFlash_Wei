@@ -4,14 +4,10 @@
     <DrawingImage.Drawing>
       <DrawingGroup>
         <GeometryDrawing Brush="Transparent" Geometry="M 0,0 H 64 V 64 H 0 Z"/>
-        <GeometryDrawing Brush="#2563EB" Geometry="M 11,1 H 53 A 10,10 0 0 1 63,11 V 53 A 10,10 0 0 1 53,63 H 11 A 10,10 0 0 1 1,53 V 11 A 10,10 0 0 1 11,1 Z"/>
-        <GeometryDrawing Brush="{x:Null}" Geometry="M 8,35 A 24,24 0 0 1 56,35">
-          <GeometryDrawing.Pen><Pen Brush="#FFFFFF" Thickness="3" StartLineCap="Flat" EndLineCap="Flat"/></GeometryDrawing.Pen>
-        </GeometryDrawing>
-        <GeometryDrawing Brush="{x:Null}" Geometry="M 16,35 A 16,16 0 0 1 48,35">
-          <GeometryDrawing.Pen><Pen Brush="#FFFFFF" Thickness="3" StartLineCap="Flat" EndLineCap="Flat"/></GeometryDrawing.Pen>
-        </GeometryDrawing>
-        <GeometryDrawing Brush="#FFFFFF" Geometry="M 32,36 L 48,52 H 16 Z"/>
+        <GeometryDrawing Brush="#007AFF" Geometry="M 40.6,1 c 7.841,0 11.761,0 14.756,1.526 a 14,14 0 0 1 6.118,6.118 c 1.526,2.995 1.526,6.915 1.526,14.756 L 63,40.6 c 0,7.841 0,11.761 -1.526,14.756 a 14,14 0 0 1 -6.118,6.118 c -2.995,1.526 -6.915,1.526 -14.756,1.526 L 23.4,63 c -7.841,0 -11.761,0 -14.756,-1.526 a 14,14 0 0 1 -6.118,-6.118 c -1.526,-2.995 -1.526,-6.915 -1.526,-14.756 L 1,23.4 c 0,-7.841 0,-11.761 1.526,-14.756 a 14,14 0 0 1 6.118,-6.118 c 2.995,-1.526 6.915,-1.526 14.756,-1.526 Z"/>
+        <GeometryDrawing Brush="#FFFFFF" Geometry="M 16,27 A 4,4 0 0 1 24,27 V 39 A 4,4 0 0 1 16,39 Z"/>
+        <GeometryDrawing Brush="#FFFFFF" Geometry="M 28,19 A 4,4 0 0 1 36,19 V 45 A 4,4 0 0 1 28,45 Z"/>
+        <GeometryDrawing Brush="#FFFFFF" Geometry="M 40,26 A 4,4 0 0 1 48,26 V 42 A 4,4 0 0 1 40,42 Z"/>
       </DrawingGroup>
     </DrawingImage.Drawing>
   </DrawingImage>
