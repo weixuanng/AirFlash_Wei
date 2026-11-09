@@ -153,7 +153,7 @@ internal static class UiSmoke
             Render(panel, Path.Combine(directory, "panel-icons-stopped.png"), 1);
             Check(engine.DisposedCount == engine.CreatedCount, "stop releases mock engine", checks);
             await app.StopAsync(); await Until(() => app.Snapshot.State == PlaybackState.Idle);
-            settings.Hide(); panel.ShowPanel(); await Pump();
+            panel.ShowPanel(); await Pump();
             CheckPanelIcons(panel, app, checks);
             Render(panel, Path.Combine(directory, "panel-icons-stopped.png"), 1);
             Check(engine.DisposedCount == engine.CreatedCount, "stop releases mock engine", checks);
@@ -347,11 +347,8 @@ internal static class UiSmoke
     }
     internal sealed class MemoryStore : ISettingsStore
     {
-        public bool Fail;
-        public int DelayMs;
         public int Saves;
         public int Resets;
-        public bool FailReset;
         public TaskCompletionSource? SaveGate { get; set; }
         public TaskCompletionSource? SaveEntered { get; set; }
         public AppSettings Saved => _settings.Clone();
@@ -362,8 +359,8 @@ internal static class UiSmoke
         private AppSettings _settings = new() { AutoConnectOnDiscover = false, MuteWhileStreaming = false, ShowWiderVolume = false,
             StartAtLogin = false, ForceReconnect = false, MaxReconnectAttempts = 5, AutoConnectLastReceiver = false, ResumeAfterTakeover = false };
         public AppSettings Load() => _settings.Clone();
-        public Task ResetAsync() { Resets++; if (FailReset) throw new IOException("mock reset failed"); _settings = new(); return Task.CompletedTask; }
-        public void Save(AppSettings settings) { UiPerformance.Count("settings.save"); Thread.Sleep(DelayMs); if (Fail) throw new IOException("模拟保存失败"); _settings = settings.Clone(); }
+        public Task ResetAsync() { Resets++; _settings = new(); return Task.CompletedTask; }
+        public void Save(AppSettings settings) { UiPerformance.Count("settings.save"); _settings = settings.Clone(); }
         public async Task SaveAsync(AppSettings settings)
         {
             Interlocked.Increment(ref Saves); SaveEntered?.TrySetResult();
@@ -384,7 +381,6 @@ internal static class UiSmoke
     }
     internal sealed class MockAudio : IAudioService
     {
-        public int DelayMs;
         public event Action? EndpointsChanged;
         public int Enumerations;
         public int ActiveEnumerations, MaxEnumerations;
@@ -400,7 +396,7 @@ internal static class UiSmoke
             UiPerformance.Count("audio.enumerate"); Enumerations++;
             ActiveEnumerations++; MaxEnumerations = Math.Max(MaxEnumerations, ActiveEnumerations);
             var items = Items.ToArray(); EnumerationEntered?.TrySetResult();
-            try { if (EnumerationGate is { } gate) await gate.Task; await Task.Delay(DelayMs); return items; }
+            try { if (EnumerationGate is { } gate) await gate.Task; return items; }
             finally { ActiveEnumerations--; }
         }
         public bool FailMute { get; set; }
@@ -430,18 +426,14 @@ internal static class UiSmoke
     }
     internal sealed class MockFactory : IEngineFactory
     {
-        public int StopDelayMs;
         public TaskCompletionSource? StopEntered, StopGate;
-        public bool FailOpen;
         public bool AutoReady = true;
-        public bool SupportsAdaptiveLead;
         public Action<object>? EmitEvent;
         public ConcurrentQueue<JsonElement> Commands { get; } = new();
         public int CreatedCount, DisposedCount;
         public IEngineConnection Open()
         {
             UiPerformance.Count("engine.open"); Interlocked.Increment(ref CreatedCount);
-            if (FailOpen) throw new IOException("mock connection failed");
             return new MockConnection(this);
         }
     }
@@ -454,7 +446,7 @@ internal static class UiSmoke
         public Task SendAsync(string session, string command, object? parameters, CancellationToken cancellation)
         {
             factory.Commands.Enqueue(JsonSerializer.SerializeToElement(new { command, @params = parameters }));
-            if (command == "hello") Emit(session, new { @event = "hello", capabilities = new[] { "receiver_profiles", "software_stereo", "continuity", "buffered_audio", "member_volume", "receiver_password", "standby_release", "receiver_ownership_guard", "application_capture", "forced_latency" }.Concat(factory.SupportsAdaptiveLead ? ["adaptive_lead_v2"] : Array.Empty<string>()).ToArray() });
+            if (command == "hello") Emit(session, new { @event = "hello", capabilities = new[] { "receiver_profiles", "software_stereo", "continuity", "buffered_audio", "member_volume", "receiver_password", "standby_release", "receiver_ownership_guard", "application_capture", "forced_latency" } });
             if (command == "pair") factory.EmitEvent = payload => Emit(session, payload);
             if (command == "start")
             {
@@ -464,11 +456,7 @@ internal static class UiSmoke
                     Emit(session, new { @event = "negotiated", receiver_id = peer.Text("receiver_id"), host = peer.Text("host"), port = peer.Integer("port"), codec = "alac", transport = "realtime", timing = "ptp", clock_role = peer.GetProperty("profile").Boolean("follow_receiver_clock") == true ? "follow" : "sender", sample_rate = data.Integer("sample_rate") });
                 factory.EmitEvent = payload => Emit(session, payload);
                 if (factory.AutoReady)
-                {
-                    if (factory.SupportsAdaptiveLead) Emit(session, new { @event = "streaming", session_epoch = 1, lead_sequence = 0,
-                        baseline_ms = data.Integer("latency_ms"), lead_extra_ms = 0, effective_latency_ms = data.Integer("latency_ms"), lead_ceiling_ms = 100, live_lead_supported = true });
-                    else Emit(session, new { @event = "streaming" });
-                }
+                    Emit(session, new { @event = "streaming" });
                 var hosts = data.Text("group_mode") == "software_stereo" ? data.GetProperty("peers").EnumerateArray().Select(p => p.Text("host")).ToArray() : [_host];
                 foreach (var host in hosts)
                 {
@@ -500,6 +488,6 @@ internal static class UiSmoke
         {
             try { return await _events.Reader.ReadAsync(cancellation); } catch (ChannelClosedException) { return null; }
         }
-        public async ValueTask DisposeAsync() { factory.StopEntered?.TrySetResult(); if (factory.StopGate is { } gate) await gate.Task; await Task.Delay(factory.StopDelayMs); if (_metrics is not null) { await _metrics.CancelAsync(); _metrics.Dispose(); } _events.Writer.TryComplete(); Interlocked.Increment(ref factory.DisposedCount); }
+        public async ValueTask DisposeAsync() { factory.StopEntered?.TrySetResult(); if (factory.StopGate is { } gate) await gate.Task; if (_metrics is not null) { await _metrics.CancelAsync(); _metrics.Dispose(); } _events.Writer.TryComplete(); Interlocked.Increment(ref factory.DisposedCount); }
     }
 }
