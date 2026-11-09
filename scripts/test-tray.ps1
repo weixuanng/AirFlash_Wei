@@ -1,5 +1,5 @@
 # Opt-in verification on a Windows desktop, using only isolated GUIDs and mock services.
-param([string]$Executable = 'dist/AirFlash.exe', [string]$Directory = 'artifacts/tray-test', [switch]$RequirePathRejection)
+param([string]$Executable = 'dist/Airplay.exe', [string]$Directory = 'artifacts/tray-test', [switch]$RequirePathRejection)
 $ErrorActionPreference = 'Stop'
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 function Resolve-RepoPath([string]$Path) {
@@ -17,10 +17,10 @@ $sourceDirectory = Split-Path $source -Parent
 foreach ($name in @('a', 'b')) {
     $destination = Join-Path $runDirectory $name
     New-Item -ItemType Directory -Path $destination -Force | Out-Null
-    if (Test-Path -LiteralPath (Join-Path $sourceDirectory 'AirFlash.dll')) {
+    if (Test-Path -LiteralPath (Join-Path $sourceDirectory 'Airplay.dll')) {
         # Development builds need their runtime files; published single-file builds need only the EXE.
         Get-ChildItem -LiteralPath $sourceDirectory | Copy-Item -Destination $destination -Recurse
-    } else { Copy-Item -LiteralPath $source -Destination (Join-Path $destination 'AirFlash.exe') }
+    } else { Copy-Item -LiteralPath $source -Destination (Join-Path $destination 'Airplay.exe') }
 }
 $results = foreach ($case in @(
     @{ Name = 'a'; Language = 'en-US'; WindowIdentity = $false },
@@ -28,7 +28,7 @@ $results = foreach ($case in @(
     @{ Name = 'b'; Language = 'zh-CN'; WindowIdentity = $false },
     @{ Name = 'b'; Language = 'en-US'; WindowIdentity = $true }
 )) {
-    $exe = Join-Path $runDirectory ($case.Name + '/AirFlash.exe')
+    $exe = Join-Path $runDirectory ($case.Name + '/Airplay.exe')
     $suffix = if ($case.WindowIdentity) { '-window-id' } else { '' }
     $report = Join-Path $runDirectory ($case.Name + '-' + $case.Language + $suffix + '/report.json')
     $arguments = @('--tray-smoke', '--tray-guid', $guid, '--ui-language', $case.Language, '--output', ('"' + $report + '"'))

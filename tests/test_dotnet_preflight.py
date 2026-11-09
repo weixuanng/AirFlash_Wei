@@ -71,14 +71,14 @@ foreach ($property in $global:airflashTestCase.hosts.PSObject.Properties) {
                 $outputIndex = [Array]::IndexOf($arguments, '-o') + 1
                 $publishRoot = $arguments[$outputIndex]
                 New-Item -ItemType Directory -Path $publishRoot -Force | Out-Null
-                Set-Content -LiteralPath (Join-Path $publishRoot 'AirFlash.exe') 'fake application'
+                Set-Content -LiteralPath (Join-Path $publishRoot 'Airplay.exe') 'fake application'
             }
             if ($hostCase.installer_output -and $arguments[0] -eq 'build') {
                 $versionArgument = $arguments | Where-Object { $_.StartsWith('-p:ProductVersion=') }
                 $outputArgument = $arguments | Where-Object { $_.StartsWith('-p:OutputPath=') }
                 $version = $versionArgument.Substring('-p:ProductVersion='.Length)
                 $outputRoot = $outputArgument.Substring('-p:OutputPath='.Length)
-                Set-Content -LiteralPath (Join-Path $outputRoot "AirFlash-$version.msi") 'fake MSI'
+                Set-Content -LiteralPath (Join-Path $outputRoot "Airplay-$version.msi") 'fake MSI'
             }
             Write-Output 'original command output'
             if ($hostCase.command_error) { [Console]::Error.WriteLine($hostCase.command_error) }
@@ -242,7 +242,7 @@ class Fixture:
         publish = self.root / "published app"
         publish.mkdir()
         # Only read version-resource metadata; never launch this fixture executable.
-        shutil.copyfile(sys.executable, publish / "AirFlash.exe")
+        shutil.copyfile(sys.executable, publish / "Airplay.exe")
         return publish, self.root / "installer output"
 
     def native_host(self, *, resolve_exit=0, command_exit=37):
@@ -521,7 +521,7 @@ def test_installer_success_checks_and_builds_the_same_override(fixture):
     assert [call["cwd"] for call in calls] == [str(fixture.root / "desktop")] * 2
     assert calls[0]["arguments"] == ["--version"]
     assert calls[1]["arguments"][0] == "build"
-    assert len(list(output.glob("AirFlash-*.msi"))) == 1
+    assert len(list(output.glob("Airplay-*.msi"))) == 1
 
 
 def test_installer_rejects_a_numeric_version_that_differs_from_the_exe(fixture):

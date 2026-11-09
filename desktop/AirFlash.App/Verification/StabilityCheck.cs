@@ -10,7 +10,7 @@ internal static class StabilityCheck
 {
     public static async Task<int> RunAsync(string[] args)
     {
-        AppPaths.DataDirectory = Path.Combine(Path.GetTempPath(), "AirFlash-stability-check", Guid.NewGuid().ToString("N"));
+        AppPaths.DataDirectory = Path.Combine(Path.GetTempPath(), "Airplay-stability-check", Guid.NewGuid().ToString("N"));
         var checks = new List<string>();
         try
         {
@@ -78,7 +78,7 @@ internal static class StabilityCheck
 
         discovery.Items = []; discovery.Publish(); await Until(() => app.AllReceivers.All(r => !r.Online));
         await Pump();
-        app.Receivers.Single(r => r.Receiver.Id == receiver.Id).ToggleCommand.Execute(null);
+        await app.ToggleAsync(receiver);
         await Until(() => app.Snapshot.State == PlaybackState.Idle);
         await Pump();
         Check(engine.DisposedCount == engine.CreatedCount && app.Receivers.All(r => r.Receiver.Id != receiver.Id),

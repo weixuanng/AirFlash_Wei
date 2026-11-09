@@ -18,7 +18,7 @@ public sealed class TrayService : IDisposable
     private readonly DispatcherTimer _retry;
     private readonly ControlPanel _panel;
     private readonly AppViewModel _viewModel;
-    private readonly Action _settings, _quit;
+    private readonly Action _checkUpdates, _about, _quit;
     private readonly uint _taskbarCreated = RegisterWindowMessage("TaskbarCreated");
     private readonly Guid _guid;
     private static readonly Guid ProductionGuid = new("f3f63f27-a6df-4a27-a942-b448e17dcd12");
@@ -26,11 +26,11 @@ public sealed class TrayService : IDisposable
     private string? _lastTitle;
     private bool _disposed;
     internal ContextMenu? ActiveMenu { get; private set; }
-    public TrayService(ControlPanel panel, AppViewModel viewModel, Action settings, Action quit)
-        : this(panel, viewModel, settings, quit, ProductionGuid) { }
-    internal TrayService(ControlPanel panel, AppViewModel viewModel, Action settings, Action quit, Guid guid, bool windowIdentityForVerification = false)
+    public TrayService(ControlPanel panel, AppViewModel viewModel, Action checkUpdates, Action about, Action quit)
+        : this(panel, viewModel, checkUpdates, about, quit, ProductionGuid) { }
+    internal TrayService(ControlPanel panel, AppViewModel viewModel, Action checkUpdates, Action about, Action quit, Guid guid, bool windowIdentityForVerification = false)
     {
-        _panel = panel; _viewModel = viewModel; _settings = settings; _quit = quit; _guid = guid;
+        _panel = panel; _viewModel = viewModel; _checkUpdates = checkUpdates; _about = about; _quit = quit; _guid = guid;
         _source = new(new HwndSourceParameters("AirFlash.Tray") { WindowStyle = unchecked((int)0x80000000), Width = 0, Height = 0 });
         _iconPixels = AppIconService.Pixels(AppIconService.TaskbarDpi(), true);
         try { _icon = LoadTrayIcon(_iconPixels); }
@@ -90,7 +90,7 @@ public sealed class TrayService : IDisposable
     {
         var data = new NotifyData { Size = (uint)Marshal.SizeOf<NotifyData>(), Window = _source.Handle, Id = 1,
             Flags = 1 | 2 | 4 | 0x80 | (identity == TrayIdentity.Guid ? 0x20u : 0), Callback = CallbackMessage,
-            Icon = icon, Tip = $"AirFlash · {_viewModel.StatusTitle}", Guid = identity == TrayIdentity.Guid ? _guid : Guid.Empty,
+            Icon = icon, Tip = $"Airplay · {_viewModel.StatusTitle}", Guid = identity == TrayIdentity.Guid ? _guid : Guid.Empty,
             Info = "", InfoTitle = "", Version = operation == TrayOperation.SetVersion ? 4u : 0 };
         return Shell_NotifyIcon((uint)operation, ref data);
     }
@@ -144,8 +144,8 @@ public sealed class TrayService : IDisposable
         if (ActiveMenu is { } previousMenu) previousMenu.IsOpen = false;
         var menu = new ContextMenu { Placement = PlacementMode.MousePoint, Style = (System.Windows.Style)System.Windows.Application.Current.FindResource("TextMenu") };
         void AddItem(string label, Action action) { var item = new MenuItem { Header = label }; item.Click += (_, _) => action(); menu.Items.Add(item); }
-        AddItem(L.Get("Open panel"), _panel.ShowPanel); AddItem(L.Get("Settings…"), _settings);
-        menu.Items.Add(new MenuItem { Header = L.Get("Stop streaming"), Command = _viewModel.StopCommand }); menu.Items.Add(new Separator()); AddItem(L.Get("Quit"), _quit);
+        AddItem(L.Get("Check for updates"), _checkUpdates); AddItem(L.Get("About Airplay"), _about);
+        menu.Items.Add(new Separator()); AddItem(L.Get("Quit"), _quit);
         ActiveMenu = menu;
         _panel.MenuOpen = true; menu.Closed += (_, _) => { _panel.MenuOpen = false; if (ActiveMenu == menu) ActiveMenu = null; };
         _registration.ReportResult("SetForegroundWindow", SetForegroundWindow(_source.Handle), _registration.Identity); menu.IsOpen = true;

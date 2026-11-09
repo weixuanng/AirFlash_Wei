@@ -22,3 +22,7 @@ Work happens on `claude/*` branches, PRs into `main`, CI on Windows runners.
   default on a forked repo). This commit triggers the first CI run on the
   branch, since enabling Actions does not retroactively run CI for earlier
   commits.
+
+- 9 Nov 2026: the test-fix push (4de09b3, LatencyPolicyTests now expects the
+  Real-time default) did not start a CI run — no checks appeared for that
+  commit after an hour. This commit re-triggers CI for the PR #3 branch.

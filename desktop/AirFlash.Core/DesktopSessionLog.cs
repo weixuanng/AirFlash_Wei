@@ -28,7 +28,7 @@ public sealed record DesktopSessionRecord(
 
 /// <summary>
 /// Appends the desktop-owned columns next to the engine's <c>session-summary.csv</c>
-/// under <c>%APPDATA%\AirFlash\logs\</c>. The engine cannot see a desktop reconnect:
+/// under <c>%APPDATA%\Airplay\logs\</c>. The engine cannot see a desktop reconnect:
 /// when the transport fails, the desktop opens a new IPC session rather than
 /// repairing the engine's. Recording that here keeps the two facts joined by
 /// <c>session_id</c> instead of asking the engine to guess.
@@ -50,11 +50,11 @@ public static class DesktopSessionLog
     public const string FaultSequenceTruncation = "…";
     private static readonly object Gate = new();
 
-    /// <summary>Beside the engine file, which uses the same `%APPDATA%\AirFlash\logs`
+    /// <summary>Beside the engine file, which uses the same `%APPDATA%\Airplay\logs`
     /// root (see the engine's <c>telemetry::summary_path</c>).</summary>
     public static string DefaultPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "AirFlash", "logs", FileName);
+        "Airplay", "logs", FileName);
 
     public static void Append(DesktopSessionRecord record) => Append(DefaultPath, record);
 

@@ -1,6 +1,6 @@
 # Windows compatibility and startup diagnostics
 
-AirFlash targets Windows x64, Windows 10 version 1809 / build 17763 or newer.
+Airplay targets Windows x64, Windows 10 version 1809 / build 17763 or newer.
 The qualification matrix is LTSC 2019 (17763), LTSC 2021 (19044), Windows 10 22H2
 (19045), and Windows 11. The application is self-contained; users do not need to
 install .NET, Python, PowerShell 7, or a VC++ Redistributable.
@@ -34,7 +34,7 @@ Download the candidate EXE/MSI and `collect-startup-diagnostics.ps1` from the sa
 verified build. Open Windows PowerShell and run, substituting your actual paths:
 
 ```powershell
-powershell.exe -NoProfile -File .\collect-startup-diagnostics.ps1 -Executable "C:\Program Files\AirFlash\AirFlash.exe" -OutputDirectory "$env:USERPROFILE\Desktop"
+powershell.exe -NoProfile -File .\collect-startup-diagnostics.ps1 -Executable "C:\Program Files\Airplay\Airplay.exe" -OutputDirectory "$env:USERPROFILE\Desktop"
 ```
 
 No administrator session is required. If script execution is restricted by an
@@ -50,7 +50,7 @@ settings and pairing files. Review the ZIP before sharing it.
 The compatibility check verifies system architecture, native DNS-SD exports,
 engine extraction and the JSONL v1 hello. It does not discover devices, pair,
 play sound, change local mute, or register autostart. A successful report therefore
-does not qualify those features. Normal logs are in `%APPDATA%\AirFlash\logs`.
+does not qualify those features. Normal logs are in `%APPDATA%\Airplay\logs`.
 
 ## Build and audit evidence
 

@@ -36,7 +36,7 @@ def test_launch_failure_still_produces_bounded_archive(tmp_path):
         timeout=30,
     )
     assert run.returncode == 0, run.stderr.decode(errors="replace")
-    archive = next(tmp_path.glob("AirFlash-diagnostics-*.zip"))
+    archive = next(tmp_path.glob("Airplay-diagnostics-*.zip"))
     with zipfile.ZipFile(archive) as zip_file:
         assert zip_file.namelist() == ["report.json"]
         report = json.loads(zip_file.read("report.json"))

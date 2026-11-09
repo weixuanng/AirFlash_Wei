@@ -84,7 +84,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: airflash-compatibility-${{ steps.version.outputs.version }}
+          name: airplay-compatibility-${{ steps.version.outputs.version }}
           path: |
             artifacts/compatibility/*.json
             scripts/collect-startup-diagnostics.ps1
@@ -99,16 +99,16 @@ jobs:
         run: |
           $tag = 'v' + $env:RELEASE_VERSION
           $sha = git rev-parse HEAD
-          gh release create $tag dist/AirFlash.exe "dist/AirFlash-$env:RELEASE_VERSION.msi" dist/SHA256SUMS.txt --target $sha --title "AirFlash $env:RELEASE_VERSION" --notes-file docs/RELEASE-NOTES.md --latest
+          gh release create $tag dist/Airplay.exe "dist/Airplay-$env:RELEASE_VERSION.msi" dist/SHA256SUMS.txt --target $sha --title "Airplay $env:RELEASE_VERSION" --notes-file docs/RELEASE-NOTES.md --latest
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Preserve verified stable assets for maintainer publication
         if: github.ref == 'refs/heads/main' && !inputs.publish
         uses: actions/upload-artifact@v4
         with:
-          name: airflash-release-${{ steps.version.outputs.version }}-${{ github.sha }}
+          name: airplay-release-${{ steps.version.outputs.version }}-${{ github.sha }}
           path: |
-            dist/AirFlash.exe
-            dist/AirFlash-${{ steps.version.outputs.version }}.msi
+            dist/Airplay.exe
+            dist/Airplay-${{ steps.version.outputs.version }}.msi
             dist/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
@@ -116,10 +116,10 @@ jobs:
         if: github.ref == 'refs/heads/codex/nic-discovery-preview'
         uses: actions/upload-artifact@v4
         with:
-          name: airflash-preview-${{ steps.version.outputs.version }}-${{ github.sha }}
+          name: airplay-preview-${{ steps.version.outputs.version }}-${{ github.sha }}
           path: |
-            dist/AirFlash.exe
-            dist/AirFlash-${{ steps.version.outputs.version }}.msi
+            dist/Airplay.exe
+            dist/Airplay-${{ steps.version.outputs.version }}.msi
             dist/SHA256SUMS.txt
           retention-days: 14
       - name: Preserve failure diagnostics

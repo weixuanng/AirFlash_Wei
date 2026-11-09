@@ -5,7 +5,7 @@ required clock exchanges before the startup deadline. Discovery and successful
 audio-format negotiation do not establish that UDP timing traffic can pass.
 
 Reproduce one connection failure and collect the matching `Session failure`
-entry from `%APPDATA%\AirFlash\logs\wpf-YYYY-MM-DD.log`. Its `ClockStatus`
+entry from `%APPDATA%\Airplay\logs\wpf-YYYY-MM-DD.log`. Its `ClockStatus`
 snapshot includes the engine executable path, per-receiver role and local
 address, packet counts, rejected-packet reasons, socket errors, and clock phase.
 Use the snapshot from that attempt; an engine update can change the executable
@@ -47,7 +47,7 @@ socket failure. Normal nonblocking polling is not logged as an error.
 
 A standalone HomePod on HomePod software 27 keeps announcing itself as the PTP
 grandmaster and stays silent when the sender also supplies the timeline.
-AirFlash recognises the standalone shape from the receiver TXT record (`model`
+Airplay recognises the standalone shape from the receiver TXT record (`model`
 starting with `AudioAccessory`, `igl=1`, no `pgid`, no `tsid`, and `osvers` 27 or
 later) and follows that receiver's clock instead. Releases before 0.5.0 always
 acted as the grandmaster, so they establish the session and send audio that the
@@ -55,7 +55,7 @@ HomePod never renders.
 
 The `Receiver negotiated:` line in `wpf-YYYY-MM-DD.log` records the selected
 codec, transport, timing and `clock_role`. `clock_role follow` means the
-receiver's clock is in use. `clock_role sender` means AirFlash supplies the
+receiver's clock is in use. `clock_role sender` means Airplay supplies the
 timeline, which is correct for a stereo pair or an Apple TV output but not for a
 standalone OS 27 HomePod. An NTP-timed realtime stream is also silent on a
 HomePod, so a followed receiver stays on PTP even when the PTP feature bit is not
@@ -69,8 +69,8 @@ apply.
 ## Windows Firewall
 
 The process owning PTP sockets is
-`%LOCALAPPDATA%\AirFlash\engine\<hash>\airflash-engine.exe`, extracted from the
-application. A program rule for the outer `AirFlash.exe` does not match that
+`%LOCALAPPDATA%\Airplay\engine\<hash>\airflash-engine.exe`, extracted from the
+application. A program rule for the outer `Airplay.exe` does not match that
 process. The hash directory changes when the engine changes.
 
 In Windows Defender Firewall with Advanced Security, inspect rules applying to
@@ -87,7 +87,7 @@ the engine path in the failure snapshot:
 - Recheck the program path after an update; an exception for an older hash
   directory does not cover the new engine.
 
-AirFlash reports the path and timing evidence; it does not change firewall
+Airplay reports the path and timing evidence; it does not change firewall
 policy automatically. On managed computers, local rules may be overridden by
 administrator policy.
 

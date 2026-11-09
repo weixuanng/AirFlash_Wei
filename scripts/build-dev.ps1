@@ -11,7 +11,7 @@ $null = Assert-AirFlashDotnetSdk -Context $dotnetContext
 . (Join-Path $PSScriptRoot 'dev-version.ps1')
 
 $development = Get-DevelopmentVersion -Root $repoRoot
-Write-Host "Building AirFlash $($development.Informational) from $($development.BaseTag)"
+Write-Host "Building Airplay $($development.Informational) from $($development.BaseTag)"
 New-AirFlashPackage -Context $dotnetContext -Version $development.Numeric -InformationalVersion $development.Informational `
     -BuildDirectory (Join-Path $repoRoot 'build/dev') -OutputDirectory (Join-Path $repoRoot 'dist/dev') `
     -CompatibilityArtifacts (Join-Path $repoRoot 'artifacts/dev/compatibility') -Console:$Console -Development

@@ -1,6 +1,6 @@
 # Discovery CPU and resource verification
 
-AirFlash browses `_airplay._tcp.local` and `_raop._tcp.local` only while a receiver
+Airplay browses `_airplay._tcp.local` and `_raop._tcp.local` only while a receiver
 list is visible, or during the ten-second automatic-connection startup window.
 It keeps one resolve operation per service instance and cancels every browse and
 resolve operation on suspension. Result callbacks free their result allocations;
@@ -13,7 +13,7 @@ audio session, reading saved settings or credentials, or registering a tray icon
 
 ```powershell
 ./scripts/dotnet.ps1 build AirFlash.App/AirFlash.App.csproj
-& ./desktop/AirFlash.App/bin/Debug/net10.0-windows/win-x64/AirFlash.exe --discovery-perf --output "$PWD/artifacts/discovery-perf/report.json"
+& ./desktop/AirFlash.App/bin/Debug/net10.0-windows/win-x64/Airplay.exe --discovery-perf --output "$PWD/artifacts/discovery-perf/report.json"
 ```
 
 Allow roughly five to seven minutes. The check samples 150 seconds of active discovery,

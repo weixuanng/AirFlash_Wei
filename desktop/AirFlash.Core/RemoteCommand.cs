@@ -6,7 +6,7 @@ namespace AirFlash.Core;
 /// </summary>
 /// <remarks>
 /// The engine already answers the acknowledgement, so nothing here has to reply.
-/// AirFlash's job is to act on the command in the media app the user is playing
+/// Airplay's job is to act on the command in the media app the user is playing
 /// from, which on Windows means synthesising the matching media key: the reference
 /// implementation does the same instead of reaching for the MediaRemote COM API.
 /// </remarks>

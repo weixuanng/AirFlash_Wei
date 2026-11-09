@@ -47,7 +47,7 @@ jobs:
       - name: Verify packaged startup and compatibility
         shell: pwsh
         run: |
-          $exe = (Resolve-Path artifacts/compatibility-publish/AirFlash.exe).Path
+          $exe = (Resolve-Path artifacts/compatibility-publish/Airplay.exe).Path
           foreach ($check in @('self-check', 'compat-check')) {
             $report = [IO.Path]::GetFullPath("artifacts/compatibility/$check.json")
             $process = Start-Process -FilePath $exe -ArgumentList @("--$check", '--output', ('"' + $report + '"')) -PassThru -WindowStyle Hidden

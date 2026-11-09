@@ -19,7 +19,7 @@ public sealed class GateFailureTests
     {
         var notice = Notice("protocol_error");
         Assert.Equal(GateFailureKind.ClassicOnly, GateFailure.Classify(Classic(), notice));
-        Assert.Equal(L.Get("This device only supports classic AirPlay. AirFlash cannot stream to it yet."), GateFailure.Message(Classic(), notice));
+        Assert.Equal(L.Get("This device only supports classic AirPlay. Airplay cannot stream to it yet."), GateFailure.Message(Classic(), notice));
     }
 
     [Fact]
@@ -109,7 +109,7 @@ public sealed class GateFailureTests
         var receiver = Physical(Bit40, "366.0", requiresPassword);
         var notice = Notice("authentication_failed", channel: "authentication", message: "synthetic verify rejected");
         Assert.Equal(GateFailureKind.PasswordOrPairing, GateFailure.Classify(receiver, notice));
-        Assert.Equal(L.Get("This device requires a password or pairing that AirFlash could not complete. Pair it again in Receivers."), GateFailure.Message(receiver, notice));
+        Assert.Equal(L.Get("This device requires a password or pairing that Airplay could not complete. Pair it again in Receivers."), GateFailure.Message(receiver, notice));
         Assert.Null(GateFailure.ActionHint(notice));
     }
 
@@ -122,7 +122,7 @@ public sealed class GateFailureTests
         var receiver = Physical(Bit40, "366.0");
         var notice = Notice("authentication_failed", channel: "authentication", message: message);
         Assert.Equal(GateFailureKind.PasswordOrPairing, GateFailure.Classify(receiver, notice));
-        Assert.Equal(L.Get("This device requires a password or pairing that AirFlash could not complete. Pair it again in Receivers."), GateFailure.Message(receiver, notice));
+        Assert.Equal(L.Get("This device requires a password or pairing that Airplay could not complete. Pair it again in Receivers."), GateFailure.Message(receiver, notice));
         Assert.Equal(L.Get("In the Home app, set speaker access to “Everyone,” then try again."), GateFailure.ActionHint(notice));
     }
 
@@ -161,7 +161,7 @@ public sealed class GateFailureTests
         // The authoritative kind stays the general authentication gate: the
         // desktop has no reliable MFi signal to act on (Q37).
         Assert.Equal(GateFailureKind.PasswordOrPairing, GateFailure.Classify(AirPlay2(), notice));
-        Assert.Equal(L.Get("This device requires MFi authentication, which AirFlash cannot perform without Apple hardware."), GateFailure.Message(AirPlay2(), notice));
+        Assert.Equal(L.Get("This device requires MFi authentication, which Airplay cannot perform without Apple hardware."), GateFailure.Message(AirPlay2(), notice));
     }
 
     [Fact]
@@ -169,7 +169,7 @@ public sealed class GateFailureTests
     {
         var notice = Notice("protocol_error", message: "Device requires MFi authentication");
         Assert.Equal(GateFailureKind.PasswordOrPairing, GateFailure.Classify(Classic(), notice));
-        Assert.Equal(L.Get("This device requires MFi authentication, which AirFlash cannot perform without Apple hardware."), GateFailure.Message(Classic(), notice));
+        Assert.Equal(L.Get("This device requires MFi authentication, which Airplay cannot perform without Apple hardware."), GateFailure.Message(Classic(), notice));
     }
 
     [Theory]

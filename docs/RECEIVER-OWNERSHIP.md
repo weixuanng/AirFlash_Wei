@@ -1,6 +1,6 @@
 # Receiver ownership and automatic recovery
 
-AirFlash yields when another controller takes over a receiver. If ownership
+Airplay yields when another controller takes over a receiver. If ownership
 cannot be confirmed, it pauses automatic recovery and offers manual reconnect.
 Both outcomes restore local audio. Rediscovery, settings changes and returning
 capture audio do not clear this protection; an explicit playback action does.

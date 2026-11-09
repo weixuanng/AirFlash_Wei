@@ -96,7 +96,7 @@ public sealed class SettingsTests
         Assert.True(settings.AutoConnectLastReceiver);
         Assert.True(settings.ResumeAfterTakeover);
         Assert.False(settings.StandbyEnabled);
-        Assert.Equal("normal", settings.LatencyMode);
+        Assert.Equal("realtime", settings.LatencyMode);
         Assert.Equal("system", settings.UiLanguage);
         Assert.Equal("system", settings.Theme);
         Assert.Null(settings.Validate());

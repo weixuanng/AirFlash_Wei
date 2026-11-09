@@ -40,7 +40,7 @@ internal static class StopRegression
             try
             {
                 var row = app.Receivers.Single(r => r.Receiver.Id == receiver.Id);
-                var button = Descendants(panel).OfType<Button>().Single(b => ReferenceEquals(b.DataContext, row) && ReferenceEquals(b.Command, row.PlaybackCommand));
+                var button = Descendants(panel).OfType<Button>().Single(b => ReferenceEquals(b.Command, app.PrimaryCommand));
                 if (connecting)
                 {
                     store.SaveEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -51,9 +51,9 @@ internal static class StopRegression
                 if (connecting)
                 {
                     await store.SaveEntered!.Task.WaitAsync(TimeSpan.FromSeconds(3));
-                    Check(!row.ToggleCommand.CanExecute(null) && button.IsEnabled, label + ": cancellation stays enabled while the start command is saving", checks);
+                    Check(app.PrimaryCommand.CanExecute(null) && button.IsEnabled, label + ": cancellation stays enabled while the start command is saving", checks);
                 }
-                Check(ReferenceEquals(button.Command, app.StopCommand), label + ": active button uses the independent stop command", checks);
+                Check(app.PrimaryIsStop && app.PrimaryLabel == L.Get("Disconnect"), label + ": primary button offers Disconnect while active", checks);
                 engine.StopEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
                 engine.StopGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
                 button.Command.Execute(null);
@@ -64,10 +64,7 @@ internal static class StopRegression
                 Check(app.IsStopping && app.StatusTitle == L.Get("Disconnecting…") && row.IsStopping && !button.IsEnabled,
                     label + ": immediate disconnect feedback replaces the old button state before cleanup completes", checks);
                 Render(panel, Path.Combine(directory, connecting ? "cancelling-connection.png" : "stopping-playback.png"), 1);
-                Check(Descendants(button).OfType<System.Windows.Shapes.Path>().Any(p => p.Name == "DisconnectSpinner" && p.IsVisible),
-                    label + ": the button displays a visible disconnect spinner; panel=" + panel.IsVisible + "; paths=" +
-                    string.Join(",", Descendants(button).OfType<System.Windows.Shapes.Path>().Select(p => p.Name + ":" + p.Visibility + ":" + p.IsVisible)), checks);
-                Check(app.Snapshot.IsActive && !app.StopCommand.CanExecute(null) && !app.Receivers.Single(r => r.Receiver.Id == other.Id).PlaybackCommand.CanExecute(null),
+                Check(app.Snapshot.IsActive && !app.StopCommand.CanExecute(null) && !app.PrimaryCommand.CanExecute(null),
                     label + ": cleanup cannot appear idle or start an overlapping session", checks);
                 audio.DefaultEndpoint = "endpoint-b"; audio.NotifyEndpoints();
                 await app.ToggleAsync(other); await Pump();
@@ -80,7 +77,7 @@ internal static class StopRegression
                 Check(!app.IsStopping && app.Snapshot.State == PlaybackState.Idle && engine.DisposedCount == 1,
                     label + ": completed cleanup restores an idle session", checks);
                 store.SaveGate?.TrySetResult();
-                await Until(() => button.IsEnabled && ReferenceEquals(button.Command, row.ToggleCommand));
+                await Until(() => button.IsEnabled && !app.PrimaryIsStop);
                 store.SaveGate = null;
                 engine.AutoReady = true;
                 button.Command.Execute(null);

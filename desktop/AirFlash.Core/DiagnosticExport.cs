@@ -44,7 +44,7 @@ public static class DiagnosticExport
     public static string Write(string directory, string content)
     {
         Directory.CreateDirectory(directory);
-        var path = Path.Combine(directory, $"AirFlash-diagnostics-{DateTime.Now:yyyyMMdd-HHmmss}.json");
+        var path = Path.Combine(directory, $"Airplay-diagnostics-{DateTime.Now:yyyyMMdd-HHmmss}.json");
         File.WriteAllText(path, content);
         return path;
     }

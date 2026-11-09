@@ -21,6 +21,6 @@ public static class AppVersion
     {
         var display = Normalize(informationalVersion, assemblyVersion);
         var suffix = IsPreview(informationalVersion, assemblyVersion) ? " · Preview" : "";
-        return $"AirFlash {display}{suffix} · WPF";
+        return $"Airplay {display}{suffix} · WPF";
     }
 }

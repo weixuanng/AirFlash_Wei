@@ -7,12 +7,12 @@ internal static class Program
 {
     internal static string? DiagnosticStartupDataDirectory { get; private set; }
     internal static bool IsDiagnostic(string[] args) => args.Any(a => a.EndsWith("-check", StringComparison.Ordinal)
-        || a is "--ui-smoke" or "--tray-smoke" or "--ui-perf" or "--discovery-perf");
+        || a is "--ui-smoke" or "--tray-smoke" or "--discovery-perf");
     // Match the modes actually dispatched by App.OnStartup. The broad error-reporting
     // predicate above must not redirect a normal startup merely because a value ends in -check.
     internal static bool NeedsDiagnosticIsolation(string[] args) => args.Any(a => a is
         "--discovery-perf" or "--update-check" or "--self-check" or "--stability-check" or "--compat-check" or
-        "--discovery-check" or "--audio-check" or "--ui-smoke" or "--tray-smoke" or "--ui-perf");
+        "--discovery-check" or "--audio-check" or "--ui-smoke" or "--tray-smoke");
     [STAThread]
     public static int Main(string[] args)
     {
@@ -22,7 +22,7 @@ internal static class Program
             // Establish a safe fallback before even diagnostic argument parsing can fail.
             AppPaths.DataDirectory = args.Any(a => a is "--ui-smoke" or "--tray-smoke")
                 ? Path.Combine(Path.GetTempPath(), "airplay-ui-smoke", "isolated-data")
-                : Path.Combine(Path.GetTempPath(), "airflash-diagnostics", Guid.NewGuid().ToString("N"), "isolated-data");
+                : Path.Combine(Path.GetTempPath(), "airplay-diagnostics", Guid.NewGuid().ToString("N"), "isolated-data");
             DiagnosticStartupDataDirectory = AppPaths.DataDirectory;
         }
         // Also works when the WPF resource dictionary or localization cannot initialize.
@@ -55,7 +55,7 @@ internal static class Program
             try { App.WriteOutput(args, new { ok = false, stage, error = error.ToString(), hresult = $"0x{error.HResult:X8}" }); }
             catch (Exception reportError) { AppPaths.Log($"Diagnostic output failed: {reportError.Message}"); }
             if (!IsDiagnostic(args))
-                MessageBox(IntPtr.Zero, $"{error.Message}\n\nLogs: {AppPaths.LogDirectory}", "AirFlash startup failed", 0x10);
+                MessageBox(IntPtr.Zero, $"{error.Message}\n\nLogs: {AppPaths.LogDirectory}", "Airplay startup failed", 0x10);
             return 1;
         }
     }

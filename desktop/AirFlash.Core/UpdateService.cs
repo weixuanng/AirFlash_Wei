@@ -7,14 +7,14 @@ public sealed record ReleaseUpdate(Version Version, Uri DownloadPage);
 
 public sealed class UpdateService(HttpClient client)
 {
-    public const string RepositoryUrl = "https://github.com/Ding-Kyoma/AirFlash";
-    public const string LatestApi = "https://api.github.com/repos/Ding-Kyoma/AirFlash/releases/latest";
+    public const string RepositoryUrl = "https://github.com/weixuanng/AirFlash_Wei";
+    public const string LatestApi = "https://api.github.com/repos/weixuanng/AirFlash_Wei/releases/latest";
     public async Task<ReleaseUpdate?> CheckAsync(CancellationToken cancellationToken = default)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(15));
         using var request = new HttpRequestMessage(HttpMethod.Get, LatestApi);
-        request.Headers.UserAgent.ParseAdd("AirFlash-update-check");
+        request.Headers.UserAgent.ParseAdd("Airplay-update-check");
         request.Headers.Accept.ParseAdd("application/vnd.github+json");
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseContentRead, timeout.Token);
         if (response.StatusCode == HttpStatusCode.NotFound) return null;
@@ -51,7 +51,7 @@ public sealed class UpdateCheckState(UpdateService service, Version currentVersi
             if (_disposed) return;
             if (release is null) Status = L.Get("No stable release is available yet.");
             else if (release.Version <= currentVersion) Status = L.Get("You are up to date.");
-            else { DownloadPage = release.DownloadPage; Status = string.Format(L.Get("AirFlash {0} is available."), release.Version.ToString(3)); }
+            else { DownloadPage = release.DownloadPage; Status = string.Format(L.Get("Airplay {0} is available."), release.Version.ToString(3)); }
         }
         catch (OperationCanceledException) when (_stop.IsCancellationRequested) { }
         catch (OperationCanceledException) { if (!_disposed) Status = L.Get("Update check timed out. Please try again."); }

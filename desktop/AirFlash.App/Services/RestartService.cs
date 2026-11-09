@@ -21,7 +21,7 @@ public sealed class RestartService : IRestartService
         start.ArgumentList.Add("--restart-after");
         start.ArgumentList.Add(Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
         start.ArgumentList.Add(Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        using var process = Process.Start(start) ?? throw new IOException("Could not restart AirFlash.");
+        using var process = Process.Start(start) ?? throw new IOException("Could not restart Airplay.");
     }
     internal static void WaitForPreviousProcess(string[] args)
     {
@@ -34,7 +34,7 @@ public sealed class RestartService : IRestartService
         using (previous)
         {
             if (previous.StartTime.ToUniversalTime().Ticks != startedAt) return;
-            if (!previous.WaitForExit(30000)) throw new TimeoutException("AirFlash could not restart because the previous process is still running.");
+            if (!previous.WaitForExit(30000)) throw new TimeoutException("Airplay could not restart because the previous process is still running.");
         }
     }
 }

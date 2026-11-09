@@ -37,7 +37,7 @@ public sealed class DiagnosticExportTests
             var path = DiagnosticExport.Write(directory, "{}");
             Assert.True(File.Exists(path));
             Assert.EndsWith(".json", path);
-            Assert.Contains("AirFlash-diagnostics-", Path.GetFileName(path));
+            Assert.Contains("Airplay-diagnostics-", Path.GetFileName(path));
         }
         finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
     }

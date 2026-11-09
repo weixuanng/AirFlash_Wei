@@ -3,7 +3,7 @@
   <PropertyGroup>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <InstallerPlatform>x64</InstallerPlatform>
-    <OutputName>AirFlash-$(ProductVersion)</OutputName>
+    <OutputName>Airplay-$(ProductVersion)</OutputName>
     <OutputPath>$(OutputPath)</OutputPath>
     <DebugType>none</DebugType>
   </PropertyGroup>

@@ -17,7 +17,7 @@ function Resolve-RepoPath([string]$Path) {
 
 $publishRoot = Resolve-RepoPath $PublishPath
 $outputRoot = Resolve-RepoPath $OutputPath
-$appExe = Join-Path $publishRoot 'AirFlash.exe'
+$appExe = Join-Path $publishRoot 'Airplay.exe'
 if (-not (Test-Path -LiteralPath $appExe -PathType Leaf)) { throw "Published application missing: $appExe" }
 
 $fileVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo($appExe)
@@ -55,8 +55,8 @@ $arguments = @(
 Invoke-AirFlashDotnet -Context $dotnetContext -Arguments (@('build', (Join-Path $repoRoot 'installer/AirFlash.Package.wixproj')) + $arguments)
 if ($LASTEXITCODE -ne 0) { throw 'MSI build failed.' }
 
-$builtMsi = Join-Path $outputRoot "AirFlash-$ProductVersion.msi"
-$msi = Join-Path $outputRoot "AirFlash-$ArtifactVersion.msi"
+$builtMsi = Join-Path $outputRoot "Airplay-$ProductVersion.msi"
+$msi = Join-Path $outputRoot "Airplay-$ArtifactVersion.msi"
 if ($builtMsi -ne $msi) {
     if (-not (Test-Path -LiteralPath $builtMsi -PathType Leaf)) { throw "MSI output missing: $builtMsi" }
     Move-Item -LiteralPath $builtMsi -Destination $msi -Force

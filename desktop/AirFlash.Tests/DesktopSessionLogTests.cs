@@ -7,7 +7,7 @@ public sealed class DesktopSessionLogTests
     [Fact]
     public void AppendWritesOneHeaderAndOneRowPerSession()
     {
-        var root = Path.Combine(Path.GetTempPath(), $"airflash-desktop-log-{Guid.NewGuid():N}");
+        var root = Path.Combine(Path.GetTempPath(), $"airplay-desktop-log-{Guid.NewGuid():N}");
         var path = Path.Combine(root, DesktopSessionLog.FileName);
         try
         {
@@ -27,9 +27,9 @@ public sealed class DesktopSessionLogTests
     {
         // The engine writes session-summary.csv into this same directory (its
         // telemetry::summary_path), so the two files are joined without a path
-        // lookup: same %APPDATA%\AirFlash\logs root, different file name.
+        // lookup: same %APPDATA%\Airplay\logs root, different file name.
         var directory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AirFlash", "logs");
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Airplay", "logs");
         Assert.Equal(Path.Combine(directory, DesktopSessionLog.FileName), DesktopSessionLog.DefaultPath);
         Assert.NotEqual("session-summary.csv", DesktopSessionLog.FileName);
         Assert.Equal("session_id,desktop_reconnects,transport_fault_first,transport_fault_count,transport_fault_seq", DesktopSessionLog.Header);
@@ -38,7 +38,7 @@ public sealed class DesktopSessionLogTests
     [Fact]
     public void AppendEscapesTheSessionIdAndNeverFailsTheSession()
     {
-        var root = Path.Combine(Path.GetTempPath(), $"airflash-desktop-log-{Guid.NewGuid():N}");
+        var root = Path.Combine(Path.GetTempPath(), $"airplay-desktop-log-{Guid.NewGuid():N}");
         var path = Path.Combine(root, DesktopSessionLog.FileName);
         try
         {
@@ -70,7 +70,7 @@ public sealed class DesktopSessionLogTests
     [Fact]
     public void AnUnwritableRecordPathIsSwallowed()
     {
-        var root = Path.Combine(Path.GetTempPath(), $"airflash-desktop-log-{Guid.NewGuid():N}");
+        var root = Path.Combine(Path.GetTempPath(), $"airplay-desktop-log-{Guid.NewGuid():N}");
         Directory.CreateDirectory(root);
         try
         {

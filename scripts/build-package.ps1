@@ -67,11 +67,11 @@ function New-AirFlashPackage {
         '-o', $publish
     )
     if ($LASTEXITCODE -ne 0) { throw 'WPF publish failed; do not use residual dist files' }
-    $builtExe = Join-Path $publish 'AirFlash.exe'
+    $builtExe = Join-Path $publish 'Airplay.exe'
     if (-not (Test-Path -LiteralPath $builtExe -PathType Leaf)) { throw 'Published executable missing' }
 
     New-Item -ItemType Directory -Path $output -Force | Out-Null
-    $exe = Join-Path $output 'AirFlash.exe'
+    $exe = Join-Path $output 'Airplay.exe'
     Copy-Item -LiteralPath $builtExe -Destination $exe
     $auditPath = Join-Path $compatibility 'bundle-audit.json'
     if (-not (Test-Path -LiteralPath $auditPath)) { throw 'Missing bundle compatibility audit.' }
@@ -86,16 +86,16 @@ function New-AirFlashPackage {
     if ($LASTEXITCODE -ne 0) { throw 'Installer build failed.' }
 
     Remove-AirFlashBuildDirectory $repoRoot $build
-    $msiName = "AirFlash-$InformationalVersion.msi"
-    $expected = @('AirFlash.exe', $msiName)
+    $msiName = "Airplay-$InformationalVersion.msi"
+    $expected = @('Airplay.exe', $msiName)
     $actual = @(Get-ChildItem -LiteralPath $output -Force | Select-Object -ExpandProperty Name | Sort-Object)
     $expectedSorted = @($expected | Sort-Object)
     if (($actual -join '|') -cne ($expectedSorted -join '|')) {
         throw "Unexpected package outputs: $($actual -join ', ')"
     }
     if ($Development) {
-        Write-Host 'Development MSI uses the current stable numeric ProductVersion; uninstall an existing same-version AirFlash package before installing it.'
+        Write-Host 'Development MSI uses the current stable numeric ProductVersion; uninstall an existing same-version Airplay package before installing it.'
     }
-    Get-Item -LiteralPath (Join-Path $output 'AirFlash.exe'), (Join-Path $output $msiName) |
+    Get-Item -LiteralPath (Join-Path $output 'Airplay.exe'), (Join-Path $output $msiName) |
         Select-Object Name, Length, LastWriteTime
 }
