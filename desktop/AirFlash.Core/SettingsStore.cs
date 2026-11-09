@@ -48,7 +48,7 @@ public sealed class SettingsStore : ISettingsStore
                 var version = ReadVersion(text);
                 var json = JsonNode.Parse(text) as JsonObject ?? throw new JsonException(L.Get("Configuration must be a JSON object."));
                 // An existing file omitted this field under the release default.
-                // Only genuinely new/reset settings adopt the normal default.
+                // Missing values resolve to the fixed Real-time (120 ms) default.
                 if (!json.Any(pair => pair.Key.Equals("latency_mode", StringComparison.OrdinalIgnoreCase)))
                     json["latency_mode"] = "realtime";
                 NormalizeLatencyModes(json);

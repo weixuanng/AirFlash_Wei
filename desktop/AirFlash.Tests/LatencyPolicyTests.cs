@@ -104,6 +104,6 @@ public sealed class LatencyPolicyTests
         var settings = new AppSettings { LatencyMode = LatencyPolicy.Mode };
         Assert.Contains(LatencyPolicy.Mode, AppSettings.Modes);
         Assert.Null(settings.Validate());
-        Assert.Equal("normal", new AppSettings().LatencyMode);
+        Assert.Equal("realtime", new AppSettings().LatencyMode);
     }
 }
