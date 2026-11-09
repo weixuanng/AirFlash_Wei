@@ -152,8 +152,8 @@ def test_minimum_version_is_rejected_before_any_installer_or_user_data_operation
     dist = fixture / "dist"
     dist.mkdir()
     # Synthetic metadata has version components 0.0.0; neither file is executed.
-    (dist / "AirFlash.exe").write_bytes(b"synthetic unversioned input")
-    (dist / "AirFlash-0.0.0.msi").write_bytes(b"synthetic package")
+    (dist / "Airplay.exe").write_bytes(b"synthetic unversioned input")
+    (dist / "Airplay-0.0.0.msi").write_bytes(b"synthetic package")
     environment = {
         key: value
         for key, value in os.environ.items()
@@ -183,7 +183,7 @@ def test_minimum_version_is_rejected_before_any_installer_or_user_data_operation
             "try { & $env:AIRFLASH_LIFECYCLE_SCRIPT; $errorMessage=$null } "
             "catch { $errorMessage=$_.Exception.Message }; "
             "@{error=$errorMessage;operations=@($global:operations);"
-            "user_data_created=(Test-Path -LiteralPath (Join-Path $env:APPDATA 'AirFlash'))}"
+            "user_data_created=(Test-Path -LiteralPath (Join-Path $env:APPDATA 'Airplay'))}"
             "|ConvertTo-Json -Compress",
         ],
         env=environment,
