@@ -143,6 +143,9 @@ internal static class UiSmoke
                 App.WriteOutput(args, new { ok = true, checks, tray_guid = trayGuid, identity = initialIdentity, window_identity_for_verification = windowIdentityForVerification, path = Environment.ProcessPath, note = "Isolated tray verification; engine/audio/discovery/autostart services are simulated." });
                 return 0;
             }
+            var advanced = (System.Windows.Controls.Primitives.ToggleButton)panel.FindName("AdvancedToggle");
+            Check(advanced.IsChecked != true && !((FrameworkElement)panel.FindName("AdvancedPanel")).IsVisible, "latency controls start hidden behind Advanced", checks);
+            advanced.IsChecked = true; await Pump();
             var mode = Descendants(panel).OfType<ComboBox>().Single(); mode.IsDropDownOpen = true; await Pump();
             Check(panel.IsVisible, "dropdown does not dismiss panel", checks); mode.IsDropDownOpen = false; await Pump();
             var customLatency = ((IEnumerable<StreamChoice>)mode.ItemsSource).Single(c => Equals(c.Value, "custom"));
@@ -173,9 +176,12 @@ internal static class UiSmoke
             await Until(() => app.Snapshot.State == PlaybackState.Streaming);
             CheckPanelIcons(panel, app, checks);
             Check(engine.Commands.Any(c => c.Text("command") == "start"), "panel start reaches engine", checks);
+            var primary = Descendants(panel).OfType<Button>().Single(b => ReferenceEquals(b.Command, app.PrimaryCommand));
+            Check(app.PrimaryIsStop && app.PrimaryLabel == L.Get("Stop") && primary.IsEnabled, "main button offers Stop while playing", checks);
             Invoke(playbackButton);
             await Until(() => app.Snapshot.State == PlaybackState.Idle);
             CheckPanelIcons(panel, app, checks);
+            Check(!app.PrimaryIsStop && app.PrimaryLabel == L.Get("Play") && primary.IsEnabled, "main button offers Play when idle", checks);
             Invoke(playbackButton);
             await Until(() => app.Snapshot.State == PlaybackState.Streaming);
             CheckPanelIcons(panel, app, checks);
@@ -507,7 +513,12 @@ internal static class UiSmoke
         public TaskCompletionSource? SaveGate { get; set; }
         public TaskCompletionSource? SaveEntered { get; set; }
         public AppSettings Saved => _settings.Clone();
-        private AppSettings _settings = new() { AutoConnectOnDiscover = false, MuteWhileStreaming = false, ShowWiderVolume = false };
+        // These fixtures were written for the upstream defaults; pin them so the
+        // UI checks keep testing the explicit paths. The seamless defaults
+        // (login item, forced reconnect, last-receiver auto-connect, takeover
+        // resume) have their own unit tests.
+        private AppSettings _settings = new() { AutoConnectOnDiscover = false, MuteWhileStreaming = false, ShowWiderVolume = false,
+            StartAtLogin = false, ForceReconnect = false, MaxReconnectAttempts = 5, AutoConnectLastReceiver = false, ResumeAfterTakeover = false };
         public AppSettings Load() => _settings.Clone();
         public Task ResetAsync() { Resets++; if (FailReset) throw new IOException("mock reset failed"); _settings = new(); return Task.CompletedTask; }
         public void Save(AppSettings settings) { UiPerformance.Count("settings.save"); Thread.Sleep(DelayMs); if (Fail) throw new IOException("模拟保存失败"); _settings = settings.Clone(); }

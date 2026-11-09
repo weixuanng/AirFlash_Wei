@@ -45,6 +45,8 @@ internal static class UiSettingsRecovery
         var path = Path.Combine(directory, name + ".json"); File.WriteAllBytes(path, original);
         var store = new SettingsStore(path);
         var initial = store.Load();
+        // StartAtLogin defaults to on for fresh installs, but a recovered
+        // (unreadable) configuration deliberately keeps it off.
         Check(initial.Validate() is null && !initial.StartAtLogin && !initial.AutoConnectOnDiscover, name + ": first shell load returns valid safe defaults", checks);
         Check(!string.IsNullOrEmpty(store.LoadWarning), name + ": first load reports recovery", checks);
         var discovery = new FixtureDiscovery(); var autostart = new FixtureAutostart(); var audio = new FixtureAudio(); var engine = new UiSmoke.MockFactory();
@@ -84,6 +86,7 @@ internal static class UiSettingsRecovery
             using (var locked = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None))
             {
                 var initial = store.Load();
+                // Unreadable (locked) configuration: start-at-login stays off by design.
                 Check(initial.Validate() is null && !initial.AutoConnectOnDiscover && !initial.StartAtLogin && !string.IsNullOrEmpty(store.LoadWarning), "locked settings: shell load recovers without an escaping reread", checks);
                 app = new(store, discovery, autostart, audio, engine, Application.Current.Dispatcher);
                 app.Start(); await app.Startup.WaitAsync(TimeSpan.FromSeconds(5));
