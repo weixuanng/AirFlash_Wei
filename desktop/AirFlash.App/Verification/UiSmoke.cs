@@ -298,8 +298,12 @@ internal static class UiSmoke
             // Both glyphs sit on accent fills: the primary button and the receiver's accent tile.
             Check(brush?.Color == ResourceColor("AccentForegroundBrush"), $"{icon.Name} follows the current theme color", checks);
             if (icon.Name == "ReceiverIcon")
-                Check(VisualTreeHelper.GetParent(icon) is Border { Background: SolidColorBrush tile } && tile.Color == ResourceColor("AccentBrush"),
+            {
+                DependencyObject? parent = icon;
+                do parent = VisualTreeHelper.GetParent(parent); while (parent is not null and not Border);
+                Check(parent is Border { Background: SolidColorBrush tile } && tile.Color == ResourceColor("AccentBrush"),
                     "ReceiverIcon sits on an accent-coloured tile", checks);
+            }
             if (icon.Name == "PrimaryIcon")
             {
                 var button = Descendants(panel).OfType<Button>().Single(b => ReferenceEquals(b.Command, app.PrimaryCommand));
