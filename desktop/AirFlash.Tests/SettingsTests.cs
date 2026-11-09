@@ -30,8 +30,9 @@ public sealed class SettingsTests
     {
         var source = new AppSettings
         {
-            StartAtLogin = true, MuteWhileStreaming = false, AutoConnectOnDiscover = false,
-            ForceReconnect = false, MaxReconnectAttempts = 12, UiLanguage = "zh", Theme = "dark",
+            StartAtLogin = false, MuteWhileStreaming = false, AutoConnectOnDiscover = false,
+            ForceReconnect = false, MaxReconnectAttempts = 12, AutoConnectLastReceiver = false, ResumeAfterTakeover = false,
+            UiLanguage = "zh", Theme = "dark",
             LatencyMode = "custom", CustomBufferMs = 650, StandbyEnabled = true,
             StandbySilenceSeconds = 22, CaptureMode = "endpoint", CaptureEndpoint = "b",
             MasterVolume = 41, LastReceiverId = "a", DiscoveryInterfaceId = "01db7c77-1016-49cb-8f5c-f5c194425d15",
@@ -88,10 +89,14 @@ public sealed class SettingsTests
     public void FirstRunDefaultsMatchStartupPage()
     {
         var settings = new AppSettings();
-        Assert.False(settings.StartAtLogin);
+        Assert.True(settings.StartAtLogin);
         Assert.False(settings.AutoConnectOnDiscover);
-        Assert.False(settings.ForceReconnect);
-        Assert.Equal(5, settings.MaxReconnectAttempts);
+        Assert.True(settings.ForceReconnect);
+        Assert.Equal(10, settings.MaxReconnectAttempts);
+        Assert.True(settings.AutoConnectLastReceiver);
+        Assert.True(settings.ResumeAfterTakeover);
+        Assert.False(settings.StandbyEnabled);
+        Assert.Equal("normal", settings.LatencyMode);
         Assert.Equal("system", settings.UiLanguage);
         Assert.Equal("system", settings.Theme);
         Assert.Null(settings.Validate());

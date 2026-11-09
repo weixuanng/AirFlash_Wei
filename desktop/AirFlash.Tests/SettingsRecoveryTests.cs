@@ -88,7 +88,7 @@ public sealed class SettingsRecoveryTests
     {
         using var fixture = new Fixture();
         var store = new SettingsStore(fixture.Path);
-        AssertDefaults(store.Load());
+        AssertDefaults(store.Load(), recovered: false);
         Assert.Null(store.LoadWarning);
         Assert.False(File.Exists(fixture.Path));
         store.Save(new() { MasterVolume = 19 });
@@ -636,14 +636,16 @@ public sealed class SettingsRecoveryTests
         fixture.AssertNoTemps();
     }
 
-    private static void AssertDefaults(AppSettings settings)
+    // Recovered (unreadable) configurations keep start-at-login off; a genuinely
+    // new installation (missing file) adopts the on-by-default login item.
+    private static void AssertDefaults(AppSettings settings, bool recovered = true)
     {
         Assert.Null(settings.Validate());
         Assert.Equal(5, settings.SchemaVersion);
         Assert.Equal(100, settings.MasterVolume);
         Assert.False(settings.AutoConnectOnDiscover);
-        Assert.False(settings.ForceReconnect);
-        Assert.False(settings.StartAtLogin);
+        Assert.True(settings.ForceReconnect);
+        Assert.Equal(!recovered, settings.StartAtLogin);
         Assert.Empty(settings.ManualReceivers);
         Assert.Empty(settings.Receivers);
     }

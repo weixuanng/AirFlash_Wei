@@ -8,6 +8,7 @@
     "user32.dll!SetProcessDpiAwarenessContext": {"minimum_build": 15063, "source": "https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-setprocessdpiawarenesscontext"},
     "shcore.dll!GetDpiForMonitor": {"minimum_build": 9600, "source": "https://learn.microsoft.com/windows/win32/api/shellscalingapi/nf-shellscalingapi-getdpiformonitor"},
     "dwmapi.dll!DwmSetWindowAttribute": {"minimum_build": 6000, "source": "https://learn.microsoft.com/windows/win32/api/dwmapi/nf-dwmapi-dwmsetwindowattribute"},
+    "dwmapi.dll!DwmExtendFrameIntoClientArea": {"minimum_build": 6000, "source": "https://learn.microsoft.com/windows/win32/api/dwmapi/nf-dwmapi-dwmextendframeintoclientarea"},
     "dnsapi.dll!DnsServiceBrowse": {"minimum_build": 10240, "source": "https://learn.microsoft.com/windows/win32/api/windns/nf-windns-dnsservicebrowse"},
     "dnsapi.dll!DnsServiceResolve": {"minimum_build": 10240, "source": "https://learn.microsoft.com/windows/win32/api/windns/nf-windns-dnsserviceresolve"},
     "dnsapi.dll!DnsServiceBrowseCancel": {"minimum_build": 10240, "source": "https://learn.microsoft.com/windows/win32/api/windns/nf-windns-dnsservicebrowsecancel"},
