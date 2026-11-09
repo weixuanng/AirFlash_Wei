@@ -5,25 +5,25 @@ namespace AirFlash.Tests;
 public sealed class ForcedLatencySettingsTests
 {
     [Fact]
-    public async Task FreshAndResetSettingsUseNormalWithoutForcing()
+    public async Task FreshAndResetSettingsUseRealtimeWithoutForcing()
     {
         using var fixture = new Fixture();
         var store = new SettingsStore(fixture.Path);
-        Assert.Equal("normal", store.Load().LatencyMode);
+        Assert.Equal("realtime", store.Load().LatencyMode);
         var settings = new AppSettings { LatencyMode = "custom", CustomBufferMs = 650, ForceLatency = true };
         store.Save(settings);
         await store.ResetAsync();
         var reset = store.Load();
-        Assert.Equal("normal", reset.LatencyMode);
+        Assert.Equal("realtime", reset.LatencyMode);
         Assert.False(reset.ForceLatency);
     }
 
     [Theory]
-    [InlineData("{\"schema_version\":4}", "normal")]
+    [InlineData("{\"schema_version\":4}", "realtime")]
     [InlineData("{\"schema_version\":5,\"LATENCY_MODE\":\"custom\",\"custom_buffer_ms\":650}", "custom")]
     [InlineData("{\"schema_version\":4,\"latency_mode\":\"buffered\"}", "buffered")]
-    [InlineData("{\"schema_version\":5,\"latency_mode\":\"adaptive\"}", "normal")]
-    [InlineData("{\"schema_version\":5,\"LATENCY_MODE\":\"ADAPTIVE\"}", "normal")]
+    [InlineData("{\"schema_version\":5,\"latency_mode\":\"adaptive\"}", "realtime")]
+    [InlineData("{\"schema_version\":5,\"LATENCY_MODE\":\"ADAPTIVE\"}", "realtime")]
     [InlineData("{\"schema_version\":5,\"latency_mode\":\"custom\",\"custom_buffer_ms\":650,\"receivers\":{\"a\":{\"latency_mode\":\"adaptive\"},\"b\":{\"latency_mode\":\"buffered\"}}}", "custom")]
     public void ExistingFilesKeepTheReleaseModeAndRecoveryAcrossRepeatedSaves(string json, string expected)
     {
@@ -38,7 +38,7 @@ public sealed class ForcedLatencySettingsTests
             if (expected == "custom") Assert.Equal(650, settings.CustomBufferMs);
             if (json.Contains("\"receivers\""))
             {
-                Assert.Equal("normal", settings.ReadOptions("a").LatencyMode);
+                Assert.Equal("realtime", settings.ReadOptions("a").LatencyMode);
                 Assert.Equal("buffered", settings.ReadOptions("b").LatencyMode);
             }
             store.Save(settings);
@@ -46,7 +46,7 @@ public sealed class ForcedLatencySettingsTests
     }
 
     [Fact]
-    public void SavingAProgrammaticAdaptiveValueNormalizesIt()
+    public void SavingAProgrammaticAdaptiveValueNormalizesItToRealtime()
     {
         using var fixture = new Fixture();
         var settings = new AppSettings();
@@ -55,8 +55,8 @@ public sealed class ForcedLatencySettingsTests
         var store = new SettingsStore(fixture.Path);
         store.Save(settings);
         var loaded = store.Load();
-        Assert.Equal("normal", loaded.LatencyMode);
-        Assert.Equal("normal", loaded.ReadOptions("a").LatencyMode);
+        Assert.Equal("realtime", loaded.LatencyMode);
+        Assert.Equal("realtime", loaded.ReadOptions("a").LatencyMode);
     }
 
     [Fact]

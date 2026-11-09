@@ -218,8 +218,8 @@ public sealed class AirPlayCapabilityTests
     [Fact]
     public void UnknownSingleKeepsItsModelAndNeverClaimsClassic()
     {
-        var receiver = new Receiver("unknown", "Unknown", "10.0.0.9") { Model = "AirFlash receiver" };
-        Assert.Equal($"AirFlash receiver · {L.Get("AirPlay 2 support unknown")}", receiver.Detail);
+        var receiver = new Receiver("unknown", "Unknown", "10.0.0.9") { Model = "Airplay receiver" };
+        Assert.Equal($"Airplay receiver · {L.Get("AirPlay 2 support unknown")}", receiver.Detail);
         Assert.DoesNotContain(L.Get("Classic AirPlay only"), receiver.Detail, StringComparison.Ordinal);
     }
 }

@@ -154,7 +154,7 @@ public sealed class GroupMembershipTests
     public void SoftwareStereoPairIsNotExemptFromTheInvariant()
     {
         // Q41 asked whether to copy WinAirCast's `!IsCustomStereoPair` bypass.
-        // AirFlash's software stereo group is two independent receivers sent as
+        // Airplay's software stereo group is two independent receivers sent as
         // `software_stereo` peers, not a `SetStereoPair` logical unit, and the
         // engine refuses a mixed pair; so the pair gets no exemption.
         var membership = new GroupMembership();
