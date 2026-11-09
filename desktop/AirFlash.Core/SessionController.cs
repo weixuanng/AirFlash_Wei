@@ -861,7 +861,7 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
                             if (AdaptivePlan() is not null) lock (_sync) _adaptive.Recovery(item.Text("code"));
                             var current = Snapshot;
                             var takeover = notice.Code == "preempted" && notice.Reason == "takeover";
-                            Publish(epoch, current.State, takeover ? L.Get("Another device took over this AirPlay session. AirFlash reclaimed it.") : current.Message);
+                            Publish(epoch, current.State, takeover ? L.Get("Another device took over this AirPlay session. Airplay reclaimed it.") : current.Message);
                         }
                         else if (kind == "transport_metrics" && startedAt != 0)
                         {
@@ -940,7 +940,7 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
                     var wait = YieldDelay(++yieldWaits);
                     log?.Invoke($"Session yielded; code={notice.Code}; reason={notice.Reason}; busy_elsewhere={busyElsewhere}; wait={yieldWaits}; delay_ms={wait.TotalMilliseconds}");
                     Publish(epoch, PlaybackState.Preempted, otherDevice
-                        ? L.Get("Playing on another device. AirFlash will resume when the speaker is free.")
+                        ? L.Get("Playing on another device. Airplay will resume when the speaker is free.")
                         : L.Get("Waiting for the speaker to become available."));
                     await Task.Delay(wait, _clock, cancellation).ConfigureAwait(false);
                     continue;
@@ -1021,7 +1021,7 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
     {
         // The engine separates a single takeover from hitting the consecutive
         // limit so the user knows whether reconnecting can help.
-        "preempted" when notice.Reason == "limit" => L.Get("Another device keeps taking over this AirPlay session. AirFlash yielded and will not reconnect automatically."),
+        "preempted" when notice.Reason == "limit" => L.Get("Another device keeps taking over this AirPlay session. Airplay yielded and will not reconnect automatically."),
         "preempted" => L.Get("Another device took over this AirPlay session. Reconnect to claim it back."),
         "ownership_unconfirmed" => L.Get("Receiver session ownership could not be confirmed. Automatic recovery is paused. Reconnect manually to continue."),
         _ => GateFailure.Message(receiver, notice) ?? notice.Detail

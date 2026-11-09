@@ -50,7 +50,7 @@ public sealed class SettingsStore : ISettingsStore
                 // An existing file omitted this field under the release default.
                 // Only genuinely new/reset settings adopt the normal default.
                 if (!json.Any(pair => pair.Key.Equals("latency_mode", StringComparison.OrdinalIgnoreCase)))
-                    json["latency_mode"] = "normal";
+                    json["latency_mode"] = "realtime";
                 NormalizeLatencyModes(json);
                 if (version < AppSettings.CurrentSchemaVersion)
                 {
@@ -182,7 +182,7 @@ public sealed class SettingsStore : ISettingsStore
             var key = owner.Select(pair => pair.Key).FirstOrDefault(k => k.Equals("latency_mode", StringComparison.OrdinalIgnoreCase));
             if (key is not null && owner[key] is JsonValue value && value.TryGetValue<string>(out var mode)
                 && mode.Equals(LatencyPolicy.Mode, StringComparison.OrdinalIgnoreCase))
-                owner[key] = "normal";
+                owner[key] = "realtime";
         }
         Normalize(json);
         if (json["receivers"] is JsonObject receivers)
@@ -194,9 +194,9 @@ public sealed class SettingsStore : ISettingsStore
         if (_unsupportedSchema) throw new NotSupportedException(L.Get("This configuration is from a newer version. Update the app first."));
         if (settings.SchemaVersion > AppSettings.CurrentSchemaVersion) throw new NotSupportedException(L.Get("This configuration is from a newer version. Update the app first."));
         var saved = settings.Clone();
-        saved.LatencyMode = saved.LatencyMode.Equals(LatencyPolicy.Mode, StringComparison.OrdinalIgnoreCase) ? "normal" : saved.LatencyMode;
+        saved.LatencyMode = saved.LatencyMode.Equals(LatencyPolicy.Mode, StringComparison.OrdinalIgnoreCase) ? "realtime" : saved.LatencyMode;
         foreach (var options in saved.Receivers.Values)
-            if (options.LatencyMode?.Equals(LatencyPolicy.Mode, StringComparison.OrdinalIgnoreCase) == true) options.LatencyMode = "normal";
+            if (options.LatencyMode?.Equals(LatencyPolicy.Mode, StringComparison.OrdinalIgnoreCase) == true) options.LatencyMode = "realtime";
         // While the one-time Q45 split is pending, keep the file one version
         // back: a crash before the catalog pass must not let the migration be
         // skipped. Once it is discharged this save writes the current version.
