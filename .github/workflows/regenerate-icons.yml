@@ -1,5 +1,5 @@
 # Temporary: renders app.xaml, app.png and app.ico from the new app.svg on Windows,
-# because the generator needs WPF. Removed once the outputs are committed (retry).
+# because the generator needs WPF. Removed once the outputs are committed (retry 2).
 name: Regenerate icons (temporary)
 on:
   push:
