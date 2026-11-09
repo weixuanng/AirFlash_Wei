@@ -43,6 +43,32 @@ with the receiver model when a `sync`-sourced offset behaves incorrectly.
 An OS error code in `last_send_error` or `last_receive_error` identifies a local
 socket failure. Normal nonblocking polling is not logged as an error.
 
+## A followed receiver announces but never syncs
+
+`waiting_sync_pair` with many Announce (type 11) and Signaling (type 12)
+datagrams, no Sync (type 0) or Follow_Up (type 8), and `received_grants` 0 means
+the receiver is reachable and names itself grandmaster, but its clock is idle.
+A HomePod on software 27.2 does this until another PTP port takes part in
+master selection; it does not answer the unicast subscription requests.
+
+From 0.2.7 the engine wakes such a clock the way nqptp does: after three
+Announces without Sync traffic it sends one Announce with a priority1 one step
+better than the receiver's, and 150 ms later one that is one step worse. The
+receiver negotiates, finds itself the best clock again and starts sending
+Sync/Follow_Up. The sequence is repeated every two seconds, at most three times,
+until a complete pair arrives; a complete pair restores that budget.
+
+The snapshot reports this as `wake_attempts` and `announces_without_sync`.
+`packets.sent_by_type` counts what the engine sent (the wake Announces are type
+11), and `packets.first_received` / `packets.last_received` hold the first and
+latest datagram of each received type as hex, up to 128 bytes. The log also
+records `Receiver info:` (model and software version) and `Receiver timing:`
+(the key names and `timingPeerInfo` of the receiver's SETUP reply).
+
+If `wake_attempts` is 3 and Sync still never arrives, include the whole
+`Session failure` entry in the report: the Announce and Signaling samples show
+what the receiver expects.
+
 ## Connected but no audio on a standalone HomePod
 
 A standalone HomePod on HomePod software 27 keeps announcing itself as the PTP

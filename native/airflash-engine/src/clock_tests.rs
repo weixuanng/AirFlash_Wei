@@ -598,3 +598,173 @@ fn older_exchange_instants_cannot_refresh_or_inflate_readiness() {
     state.exchanged(start + Duration::from_millis(250));
     assert!(state.ready(start + Duration::from_millis(250)));
 }
+
+#[test]
+fn wake_announce_is_a_plain_announce_with_the_requested_priorities() {
+    let packet = wake_announce(7, 3, 247, 245);
+    assert_eq!(packet.len(), 64);
+    assert_eq!(packet_rejection(&packet), None);
+    assert_eq!(&packet[2..4], &64u16.to_be_bytes());
+    assert_eq!(&packet[20..28], &7u64.to_be_bytes());
+    assert_eq!(&packet[30..32], &3u16.to_be_bytes());
+    assert_eq!(
+        parse_announce(&packet),
+        Some(BmcaDataset {
+            priority1: 247,
+            clock_class: 248,
+            accuracy: 0xfe,
+            variance: 0x436a,
+            priority2: 245,
+            grandmaster: 7,
+            steps_removed: 0,
+        })
+    );
+}
+
+#[test]
+fn wake_priorities_step_around_the_receiver_and_stay_in_range() {
+    let remote = |priority1| BmcaDataset {
+        priority1,
+        priority2: 245,
+        ..BmcaDataset::local(8)
+    };
+    assert_eq!(wake_priorities(remote(248)), ((247, 245), (249, 245)));
+    assert_eq!(wake_priorities(remote(2)), ((248, 248), (3, 245)));
+    assert_eq!(wake_priorities(remote(255)), ((254, 245), (250, 245)));
+}
+
+#[test]
+fn a_silent_announcing_receiver_is_woken_in_bounded_sequences() {
+    let start = Instant::now();
+    let mut state = follower(start);
+    // `follower` delivered one Announce; two is still below the threshold.
+    followed_packet(&mut state, &announce(8, 1, 0), 0, start, 7);
+    assert_eq!(state.next_wake(start), None);
+    followed_packet(&mut state, &announce(8, 2, 0), 0, start, 7);
+    // The simulated receiver announces priority1 96, priority2 128.
+    assert_eq!(state.next_wake(start), Some((95, 128)));
+    assert_eq!(state.next_wake(start + Duration::from_millis(100)), None);
+    assert_eq!(state.next_wake(start + WAKE_GAP), Some((97, 128)));
+    // No second sequence before the retry time, even with fresh Announces.
+    for seq in 3..6u16 {
+        followed_packet(&mut state, &announce(8, seq, 0), 0, start, 7);
+    }
+    assert_eq!(state.next_wake(start + Duration::from_secs(1)), None);
+    let mut at = start;
+    for attempt in 1..WAKE_ATTEMPTS {
+        at += WAKE_RETRY;
+        assert!(state.next_wake(at).is_some(), "attempt {attempt}");
+        assert!(state.next_wake(at + WAKE_GAP).is_some());
+        for seq in 0..3u16 {
+            followed_packet(&mut state, &announce(8, 10 + seq, 0), 0, at, 7);
+        }
+    }
+    // The budget is spent: a receiver that never syncs is left alone.
+    assert_eq!(state.next_wake(at + WAKE_RETRY * 4), None);
+    assert_eq!(state.wake.total, u64::from(WAKE_ATTEMPTS));
+}
+
+#[test]
+fn sync_traffic_cancels_a_wake_and_a_complete_pair_restores_the_budget() {
+    let start = Instant::now();
+    let mut state = follower(start);
+    followed_packet(&mut state, &announce(8, 1, 0), 0, start, 7);
+    followed_packet(&mut state, &announce(8, 2, 0), 0, start, 7);
+    let (sync, follow) = sync_pair(8, 0, 6_000_000_000);
+    followed_packet(&mut state, &sync, 1_000_000_000, start, 7);
+    assert_eq!(state.wake.announces_without_sync, 0);
+    assert_eq!(state.next_wake(start), None, "a syncing clock is not woken");
+    state.wake.attempts = WAKE_ATTEMPTS;
+    followed_packet(&mut state, &follow, 1_000_100_000, start, 7);
+    assert_eq!(state.wake.attempts, 0);
+    // A sender-role peer and an inactive follower are never woken.
+    let mut sender = PeerState {
+        active: true,
+        bmca: Some(BmcaDataset::local(8)),
+        wake: WakeState {
+            announces_without_sync: 9,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    assert_eq!(sender.next_wake(start), None);
+    sender.follow = true;
+    sender.active = false;
+    assert_eq!(sender.next_wake(start), None);
+}
+
+#[test]
+fn wake_state_survives_the_association_reset_of_a_restarted_receiver() {
+    let start = Instant::now();
+    let mut state = follower(start);
+    for seq in 1..3u16 {
+        followed_packet(&mut state, &announce(8, seq, 0), 0, start, 7);
+    }
+    assert!(state.next_wake(start).is_some());
+    // The receiver restarts its PTP port under a new clock identity.
+    followed_packet(&mut state, &announce(9, 0, 0), 0, start, 7);
+    assert_eq!(state.wake.total, 1);
+    assert!(state.wake.closing.is_some());
+    assert_eq!(state.wake.attempts, 1);
+}
+
+#[test]
+fn loop_wakes_a_silent_receiver_then_follows_its_sync() {
+    let (peer, remote_event, remote_general) = crate::test_net::ptp_receiver_sockets();
+    remote_event.set_nonblocking(true).unwrap();
+    remote_general.set_nonblocking(true).unwrap();
+    let event = UdpSocket::bind("127.0.0.1:0").unwrap();
+    let general = UdpSocket::bind("127.0.0.1:0").unwrap();
+    let local_event = event.local_addr().unwrap();
+    let local_general = general.local_addr().unwrap();
+    let clock = Clock::new();
+    let timer =
+        PtpMaster::from_sockets(vec![peer], vec![peer], clock.clone(), event, general).unwrap();
+    timer.activate(peer, "127.0.0.1".parse().unwrap());
+    let started = Instant::now();
+    let mut buffer = [0u8; 2048];
+    let mut wakes = Vec::new();
+    let mut seq = 0u16;
+    let mut next_packet = started;
+    // The receiver announces at 4 Hz and syncs only after the closing Announce.
+    while started.elapsed() < Duration::from_secs(6) && !timer.ready(peer) {
+        while let Ok((n, _)) = remote_general.recv_from(&mut buffer) {
+            if buffer[0] & 15 == 11 {
+                assert_eq!(n, 64);
+                wakes.push((buffer[47], buffer[52], started.elapsed()));
+            }
+        }
+        while remote_event.recv_from(&mut buffer).is_ok() {}
+        if Instant::now() >= next_packet {
+            next_packet += Duration::from_millis(250);
+            remote_general
+                .send_to(&announce(8, seq, 0), local_general)
+                .unwrap();
+            if wakes.len() >= 2 {
+                let (sync, follow) = sync_pair(8, seq, clock.now_ns() + 5_000_000_000);
+                remote_event.send_to(&sync, local_event).unwrap();
+                remote_general.send_to(&follow, local_general).unwrap();
+            }
+            seq += 1;
+        }
+        thread::sleep(Duration::from_millis(5));
+    }
+    assert!(
+        timer.ready(peer),
+        "followed clock became ready after the wake"
+    );
+    assert_eq!(wakes.len(), 2, "one sequence: better, then worse");
+    assert_eq!((wakes[0].0, wakes[0].1), (95, 128));
+    assert_eq!((wakes[1].0, wakes[1].1), (97, 128));
+    let gap = wakes[1].2 - wakes[0].2;
+    assert!(gap >= Duration::from_millis(140) && gap < Duration::from_millis(400));
+    let snapshot = timer.snapshots().remove(0);
+    assert_eq!(snapshot.wake_attempts, 1);
+    assert_eq!(snapshot.packets.sent_by_type[11], 2);
+    assert_eq!(snapshot.offset_source, Some("sync"));
+    let report = serde_json::to_value(&snapshot).unwrap();
+    let first = report["packets"]["first_received"]["11"].as_str().unwrap();
+    assert_eq!(first.len(), 76 * 2, "the first Announce is kept as hex");
+    assert!(first.starts_with("1b02004c"));
+    assert!(report["packets"]["last_received"]["8"].is_string());
+}

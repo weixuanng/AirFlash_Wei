@@ -3,7 +3,7 @@
 use crate::rtsp::Cancellation;
 use anyhow::{Context, Result};
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{BTreeMap, HashMap, VecDeque},
     io,
     net::{IpAddr, SocketAddr, UdpSocket},
     sync::{
@@ -164,6 +164,36 @@ pub fn announce(clock: u64, seq: u16, ns: u64) -> Vec<u8> {
     p[68..].copy_from_slice(&clock.to_be_bytes());
     p
 }
+/// An Announce whose only job is to make a silent receiver clock rerun its
+/// master selection. The wire shape follows the sequence nqptp sends to Apple
+/// receivers: no path trace, announce interval -2, UTC offset 37.
+pub fn wake_announce(clock: u64, seq: u16, priority1: u8, priority2: u8) -> Vec<u8> {
+    let mut p = header(11, 64, clock, seq, 0x0408, -2);
+    p[32] = 5;
+    p[44..46].copy_from_slice(&37u16.to_be_bytes());
+    p[47] = priority1;
+    p[48..52].copy_from_slice(&[248, 0xfe, 0x43, 0x6a]);
+    p[52] = priority2;
+    p[53..61].copy_from_slice(&clock.to_be_bytes());
+    p[63] = 0xa0;
+    p
+}
+/// Priorities for the two wake Announces: first one step better than the
+/// receiver's own priority1, then one step worse, so the receiver negotiates
+/// and is immediately left as the best clock.
+fn wake_priorities(remote: BmcaDataset) -> ((u8, u8), (u8, u8)) {
+    let better = if remote.priority1 > 2 {
+        (remote.priority1 - 1, remote.priority2)
+    } else {
+        (248, 248)
+    };
+    let worse = if remote.priority1 < 254 {
+        remote.priority1 + 1
+    } else {
+        250
+    };
+    (better, (worse, remote.priority2))
+}
 pub fn sync_pair(clock: u64, seq: u16, ns: u64) -> (Vec<u8>, Vec<u8>) {
     let mut sync = header(0, 44, clock, seq, 0x0608, -3);
     timestamp(&mut sync[34..], ns);
@@ -233,7 +263,25 @@ struct PeerState {
     /// How many times the announced identity changed after the first sighting.
     identity_changes: u64,
     last_identity_change: Option<Instant>,
+    wake: WakeState,
 }
+/// A followed receiver can announce itself as grandmaster yet send no
+/// Sync/Follow_Up until another PTP port takes part in master selection.
+/// HomePod software 27.2 does this to a sender that stays silent.
+#[derive(Clone, Copy, Default)]
+struct WakeState {
+    announces_without_sync: u32,
+    /// Sequences sent since the receiver last produced a complete Sync pair.
+    attempts: u8,
+    total: u64,
+    next: Option<Instant>,
+    /// The worse Announce that closes a sequence: when it is due and its priorities.
+    closing: Option<(Instant, u8, u8)>,
+}
+const WAKE_AFTER_ANNOUNCES: u32 = 3;
+const WAKE_ATTEMPTS: u8 = 3;
+const WAKE_GAP: Duration = Duration::from_millis(150);
+const WAKE_RETRY: Duration = Duration::from_secs(2);
 const SAMPLE_LIFETIME: Duration = Duration::from_secs(2);
 const MAX_PENDING_SYNCS: usize = 32;
 const SUBSCRIPTION_RETRY: Duration = Duration::from_millis(500);
@@ -286,6 +334,35 @@ pub struct PacketSnapshot {
     send_errors: u64,
     last_send_error: Option<SocketFailure>,
     pdelay_responses: u64,
+    /// Datagrams this engine sent to the peer, indexed by PTP message type.
+    sent_by_type: [u64; 16],
+    /// First and latest datagram of each received message type, as hex, so a
+    /// failure report shows what the receiver actually said.
+    first_received: BTreeMap<u8, PacketSample>,
+    last_received: BTreeMap<u8, PacketSample>,
+}
+const SAMPLE_BYTES: usize = 128;
+#[derive(Clone, Default)]
+pub struct PacketSample(Vec<u8>);
+impl serde::Serialize for PacketSample {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut hex = String::with_capacity(self.0.len() * 2);
+        for byte in &self.0 {
+            hex.push_str(&format!("{byte:02x}"));
+        }
+        serializer.serialize_str(&hex)
+    }
+}
+impl PacketSnapshot {
+    fn sample(&mut self, kind: u8, data: &[u8]) {
+        let data = &data[..data.len().min(SAMPLE_BYTES)];
+        self.first_received
+            .entry(kind)
+            .or_insert_with(|| PacketSample(data.to_vec()));
+        let last = self.last_received.entry(kind).or_default();
+        last.0.clear();
+        last.0.extend_from_slice(data);
+    }
 }
 #[derive(Clone, serde::Serialize)]
 pub struct PeerSnapshot {
@@ -316,6 +393,9 @@ pub struct PeerSnapshot {
     pub bmca_steps_removed: Option<u16>,
     /// True when the peer's dataset outranks ours (IEEE 1588 comparison order).
     pub better_master: bool,
+    /// Wake sequences sent to a receiver clock that announced without syncing.
+    pub wake_attempts: u64,
+    pub announces_without_sync: u32,
 }
 #[derive(Clone, Copy)]
 struct Subscription {
@@ -418,6 +498,33 @@ impl PeerState {
         } else {
             "waiting_exchanges"
         }
+    }
+    /// The next wake Announce to send, as (priority1, priority2), if one is due.
+    fn next_wake(&mut self, now: Instant) -> Option<(u8, u8)> {
+        if !self.follow || !self.active {
+            return None;
+        }
+        if let Some((due, priority1, priority2)) = self.wake.closing {
+            if now < due {
+                return None;
+            }
+            self.wake.closing = None;
+            return Some((priority1, priority2));
+        }
+        let remote = self.bmca?;
+        if self.wake.announces_without_sync < WAKE_AFTER_ANNOUNCES
+            || self.wake.attempts >= WAKE_ATTEMPTS
+            || self.wake.next.is_some_and(|at| now < at)
+        {
+            return None;
+        }
+        let (better, worse) = wake_priorities(remote);
+        self.wake.attempts += 1;
+        self.wake.total += 1;
+        self.wake.announces_without_sync = 0;
+        self.wake.next = Some(now + WAKE_RETRY);
+        self.wake.closing = Some((now + WAKE_GAP, worse.0, worse.1));
+        Some(better)
     }
     fn subscription_due(&self, now: Instant) -> bool {
         self.next_subscription.is_none_or(|at| now >= at)
@@ -523,6 +630,7 @@ impl PeerState {
                 self.sync_offset
                     .map_or(sample, |old| old * 0.875 + sample * 0.125),
             );
+            self.wake.attempts = 0;
             self.exchanged(at);
         }
     }
@@ -688,6 +796,7 @@ fn followed_packet(s: &mut PeerState, data: &[u8], local_ns: u64, now: Instant, 
                 announced_clock_id: s.announced_clock_id.or(Some(id)),
                 identity_changes,
                 last_identity_change,
+                wake: s.wake,
                 ..Default::default()
             };
         }
@@ -706,7 +815,11 @@ fn followed_packet(s: &mut PeerState, data: &[u8], local_ns: u64, now: Instant, 
     if kind == 12 {
         receive_grants(s, data, own_id, now);
     }
+    if kind == 11 {
+        s.wake.announces_without_sync = s.wake.announces_without_sync.saturating_add(1);
+    }
     if (kind == 0 || kind == 8) && data.len() >= 44 {
+        s.wake.announces_without_sync = 0;
         s.remember_sync(data, local_ns, now);
     }
     if kind == 9
@@ -919,6 +1032,10 @@ impl PtpMaster {
             peer.active = true;
             peer.local_address = Some(local_address);
             peer.next_subscription = None;
+            peer.wake = WakeState {
+                total: peer.wake.total,
+                ..Default::default()
+            };
         }
     }
     /// Wait for the receiver's Announce and decide the clock role, once, before
@@ -1004,6 +1121,8 @@ impl PtpMaster {
                 bmca_grandmaster: s.bmca.map(|b| b.grandmaster),
                 bmca_steps_removed: s.bmca.map(|b| b.steps_removed),
                 better_master: s.better_master,
+                wake_attempts: s.wake.total,
+                announces_without_sync: s.wake.announces_without_sync,
             })
             .collect();
         result.sort_by_key(|s| s.host);
@@ -1083,7 +1202,10 @@ fn send_ptp(
     operation: &'static str,
 ) -> bool {
     match socket.send_to(packet, destination) {
-        Ok(sent) if sent == packet.len() => true,
+        Ok(sent) if sent == packet.len() => {
+            peer.packets.sent_by_type[usize::from(packet[0] & 15)] += 1;
+            true
+        }
         result => {
             let error = result.err().unwrap_or_else(|| {
                 io::Error::new(io::ErrorKind::WriteZero, "partial PTP datagram")
@@ -1190,8 +1312,18 @@ fn ptp_loop(
     let mut last_announce = Instant::now() - Duration::from_secs(2);
     let mut next_sync = Instant::now();
     let mut buf = [0u8; 2048];
+    let mut wake_seq = 0u16;
     while !stop.is_cancelled() {
         let now = Instant::now();
+        for peer in peers {
+            let mut states = state.lock().unwrap();
+            let s = states.get_mut(peer).unwrap();
+            if let Some((priority1, priority2)) = s.next_wake(now) {
+                let packet = wake_announce(clock_id, wake_seq, priority1, priority2);
+                wake_seq = wake_seq.wrapping_add(1);
+                send_ptp(general, &packet, (*peer, 320).into(), s, "wake_announce");
+            }
+        }
         if now >= next_sync {
             for peer in peers {
                 let mut states = state.lock().unwrap();
@@ -1318,6 +1450,7 @@ fn ptp_loop(
                 rx.fetch_add(1, Ordering::Relaxed);
                 let kind = buf[0] & 0xf;
                 s.packets.received_by_type[usize::from(kind)] += 1;
+                s.packets.sample(kind, &buf[..n]);
                 let request_seq = u16::from_be_bytes([buf[30], buf[31]]);
                 if !s.active {
                     continue;
