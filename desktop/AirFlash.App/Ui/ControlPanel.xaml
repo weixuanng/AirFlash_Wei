@@ -25,7 +25,7 @@
             </Grid>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Fill" Property="Opacity" Value="0.9"/>
+                <Setter TargetName="Fill" Property="Opacity" Value="0.88"/>
               </Trigger>
               <Trigger Property="IsPressed" Value="True">
                 <Trigger.EnterActions>
@@ -57,7 +57,7 @@
       </Setter>
     </Style>
   </Window.Resources>
-  <Border BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="8" Padding="16" Background="{DynamicResource CanvasBrush}">
+  <Border x:Name="Card" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="14" Padding="16" Background="{DynamicResource CanvasBrush}">
     <Grid>
       <Grid.RowDefinitions>
         <RowDefinition Height="Auto"/>
@@ -72,15 +72,15 @@
         </Grid.ColumnDefinitions>
         <StackPanel Orientation="Horizontal">
           <Image Source="{StaticResource AppLogo}" Width="26" Height="26" VerticalAlignment="Center" Margin="0,2,10,0"/>
-          <TextBlock Text="Airplay" FontSize="21" FontWeight="SemiBold" VerticalAlignment="Center"/>
+          <TextBlock Text="Airplay" FontFamily="{StaticResource DisplayFont}" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center"/>
         </StackPanel>
         <Button Grid.Column="1" Style="{StaticResource IconButton}" ToolTip="{loc:Text 'Quit'}" AutomationProperties.Name="{loc:Text 'Quit'}" Click="OnQuit" Margin="0,0,0,0"><Viewbox Width="18" Height="18"><Path Data="M 10,3 L 3,3 3,21 10,21 M 8,12 L 22,12 M 17,7 L 22,12 17,17" Stroke="{DynamicResource TextBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/></Viewbox></Button>
       </Grid>
       <StackPanel Grid.Row="1">
-      <Border Padding="10" CornerRadius="6" Background="{DynamicResource TintBrush}" Margin="0,0,0,12" Visibility="{Binding Notice, Converter={StaticResource NonEmpty}}">
+      <Border Padding="12,10" CornerRadius="10" Background="{DynamicResource TintBrush}" Margin="0,0,0,12" Visibility="{Binding Notice, Converter={StaticResource NonEmpty}}">
         <TextBlock Text="{Binding Notice}" Style="{StaticResource Hint}"/>
       </Border>
-      <Border Padding="10" CornerRadius="6" Background="{DynamicResource TintBrush}" Margin="0,0,0,12" Visibility="{Binding EngineMessage, Converter={StaticResource NonEmpty}}">
+      <Border Padding="12,10" CornerRadius="10" Background="{DynamicResource TintBrush}" Margin="0,0,0,12" Visibility="{Binding EngineMessage, Converter={StaticResource NonEmpty}}">
         <StackPanel>
           <TextBlock Text="{Binding EngineMessage}" Style="{StaticResource Hint}"/>
           <Button Content="{loc:Text 'Retry audio engine'}" Command="{Binding RetryEngineCommand}" HorizontalAlignment="Left" Margin="0,8,0,0" Visibility="{Binding EngineFailed, Converter={StaticResource BoolVisibility}}"/>
@@ -108,7 +108,7 @@
           <ItemsControl ItemsSource="{Binding Receivers}" loc:Motion.Stagger="True">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Border Padding="12" Margin="0,0,0,10" CornerRadius="10" BorderThickness="1">
+                <Border Padding="12" Margin="0,0,0,10" CornerRadius="12" BorderThickness="1">
                   <Border.Style>
                     <Style TargetType="Border">
                       <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
@@ -116,25 +116,34 @@
                       <Style.Triggers>
                         <DataTrigger Binding="{Binding Active}" Value="True">
                           <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                          <Setter Property="Background" Value="{DynamicResource TintBrush}"/>
                         </DataTrigger>
                       </Style.Triggers>
                     </Style>
                   </Border.Style>
                   <Grid>
                     <Grid.ColumnDefinitions>
-                      <ColumnDefinition Width="42"/>
+                      <ColumnDefinition Width="44"/>
                       <ColumnDefinition Width="*"/>
+                      <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <Border Background="{DynamicResource TintBrush}" Width="32" Height="36" CornerRadius="8" VerticalAlignment="Top">
+                    <Border Background="{DynamicResource AccentBrush}" Width="34" Height="34" CornerRadius="9" VerticalAlignment="Center">
                       <Viewbox Width="19" Height="19" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center">
                         <Grid Width="24" Height="24">
-                          <Path x:Name="ReceiverIcon" Data="{StaticResource ReceiverIconGeometry}" Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                          <Path x:Name="ReceiverIcon" Data="{StaticResource ReceiverIconGeometry}" Stroke="{DynamicResource AccentForegroundBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
                         </Grid>
                       </Viewbox>
                     </Border>
-                    <StackPanel Grid.Column="1" Margin="0,0,8,0">
+                    <StackPanel Grid.Column="1" Margin="0,0,8,0" VerticalAlignment="Center">
                       <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
-                      <TextBlock Text="{Binding StateText}" Style="{StaticResource Hint}" Margin="0,3,0,0"/>
+                      <TextBlock Text="{Binding StateText, NotifyOnTargetUpdated=True}" Style="{StaticResource Hint}" Margin="0,2,0,0" loc:Motion.FadeOnUpdate="True"/>
+                    </StackPanel>
+                    <!-- Now-playing level bars; they only animate while shown and streaming. -->
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Height="14" VerticalAlignment="Center" Margin="0,0,4,0" IsHitTestVisible="False" loc:Motion.Playing="True" Visibility="{Binding IsStreaming, Converter={StaticResource BoolVisibility}}">
+                      <Rectangle Width="3" Height="14" RadiusX="1.5" RadiusY="1.5" Fill="{DynamicResource AccentBrush}" VerticalAlignment="Bottom" Margin="0,0,2,0"/>
+                      <Rectangle Width="3" Height="14" RadiusX="1.5" RadiusY="1.5" Fill="{DynamicResource AccentBrush}" VerticalAlignment="Bottom" Margin="0,0,2,0"/>
+                      <Rectangle Width="3" Height="14" RadiusX="1.5" RadiusY="1.5" Fill="{DynamicResource AccentBrush}" VerticalAlignment="Bottom" Margin="0,0,2,0"/>
+                      <Rectangle Width="3" Height="14" RadiusX="1.5" RadiusY="1.5" Fill="{DynamicResource AccentBrush}" VerticalAlignment="Bottom"/>
                     </StackPanel>
                   </Grid>
                 </Border>
@@ -166,18 +175,32 @@
           </StackPanel>
         </Button>
         <DockPanel>
-          <Ellipse Width="6" Height="6" Fill="{DynamicResource AccentBrush}" Margin="0,0,7,0"/>
-          <TextBlock Text="{Binding StatusTitle}" FontWeight="SemiBold" FontSize="12"/>
+          <Ellipse Width="8" Height="8" Margin="0,0,7,0" VerticalAlignment="Center" loc:Motion.Breathe="{Binding StatusBusy}">
+            <Ellipse.Style>
+              <Style TargetType="Ellipse">
+                <Setter Property="Fill" Value="{DynamicResource MutedBrush}"/>
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding StatusTone}" Value="live"><Setter Property="Fill" Value="{DynamicResource SuccessBrush}"/></DataTrigger>
+                  <DataTrigger Binding="{Binding StatusTone}" Value="busy"><Setter Property="Fill" Value="{DynamicResource AccentBrush}"/></DataTrigger>
+                  <DataTrigger Binding="{Binding StatusTone}" Value="wait"><Setter Property="Fill" Value="{DynamicResource WarningBrush}"/></DataTrigger>
+                  <DataTrigger Binding="{Binding StatusTone}" Value="error"><Setter Property="Fill" Value="{DynamicResource ErrorBrush}"/></DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </Ellipse.Style>
+          </Ellipse>
+          <TextBlock Text="{Binding StatusTitle, NotifyOnTargetUpdated=True}" FontWeight="SemiBold" FontSize="12" loc:Motion.FadeOnUpdate="True"/>
         </DockPanel>
-        <TextBlock x:Name="StatusDetailText" Text="{Binding StatusDetail}" Style="{StaticResource Hint}" Margin="13,4,0,0" MaxHeight="62" TextTrimming="CharacterEllipsis" ToolTip="{Binding StatusDetail}" Visibility="{Binding StatusDetail, Converter={StaticResource NonEmpty}}"/>
-        <TextBlock x:Name="PairingActionHint" Text="{Binding ActionHint, NotifyOnTargetUpdated=True}" Style="{StaticResource Hint}" Margin="13,2,0,0" TextWrapping="Wrap" Visibility="{Binding ActionHint, Converter={StaticResource NonEmpty}}" AutomationProperties.Name="{Binding ActionHint}" AutomationProperties.LiveSetting="Polite" TargetUpdated="OnActionHintUpdated"/>
-        <Button Content="{loc:Text 'Reconnect'}" Command="{Binding ReconnectCommand}" Visibility="{Binding CanReconnect, Converter={StaticResource BoolVisibility}}" HorizontalAlignment="Left" Margin="13,8,0,0" Padding="12,4" AutomationProperties.Name="{loc:Text 'Reconnect'}"/>
+        <TextBlock x:Name="StatusDetailText" Text="{Binding StatusDetail}" Style="{StaticResource Hint}" Margin="15,4,0,0" MaxHeight="62" TextTrimming="CharacterEllipsis" ToolTip="{Binding StatusDetail}" Visibility="{Binding StatusDetail, Converter={StaticResource NonEmpty}}"/>
+        <TextBlock x:Name="PairingActionHint" Text="{Binding ActionHint, NotifyOnTargetUpdated=True}" Style="{StaticResource Hint}" Margin="15,2,0,0" TextWrapping="Wrap" Visibility="{Binding ActionHint, Converter={StaticResource NonEmpty}}" AutomationProperties.Name="{Binding ActionHint}" AutomationProperties.LiveSetting="Polite" TargetUpdated="OnActionHintUpdated"/>
+        <Button Content="{loc:Text 'Reconnect'}" Command="{Binding ReconnectCommand}" Visibility="{Binding CanReconnect, Converter={StaticResource BoolVisibility}}" HorizontalAlignment="Left" Margin="15,8,0,0" Padding="12,4" AutomationProperties.Name="{loc:Text 'Reconnect'}"/>
         <Expander Header="{loc:Text 'View error details'}" Visibility="{Binding ErrorDetails, Converter={StaticResource NonEmpty}}" Margin="0,8,0,0">
           <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto">
             <TextBlock Text="{Binding ErrorDetails}" Style="{StaticResource Hint}" Margin="0,8,0,0"/>
           </ScrollViewer>
         </Expander>
       </StackPanel>
+      <!-- Errors spring open here, over the header, like the Dynamic Island. -->
+      <loc:ErrorIsland Grid.RowSpan="4" Panel.ZIndex="10" Margin="0,-9,0,0" IsOpen="{Binding IslandActive}" Title="{Binding IslandTitle}" Message="{Binding IslandMessage}"/>
     </Grid>
   </Border>
 </Window>

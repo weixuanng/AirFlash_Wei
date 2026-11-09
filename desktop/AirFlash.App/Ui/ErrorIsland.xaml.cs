@@ -1,0 +1,164 @@
+using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Threading;
+namespace AirFlash.App.Ui;
+
+/// <summary>Error pop-up shaped like the iPhone Dynamic Island. It springs open
+/// when <see cref="IsOpen"/> turns true, settles to a compact pill after a few
+/// seconds, expands again on click and shrinks away when the error clears.
+/// Only sizes, opacity and a render scale animate; nothing runs while closed.</summary>
+public partial class ErrorIsland : UserControl
+{
+    private const double CompactWidth = 132, CompactHeight = 34;
+    private const double ExpandedWidth = 352, ExpandedHeight = 72;
+    private static readonly TimeSpan Settle = TimeSpan.FromSeconds(4.5);
+    private static readonly TimeSpan Quick = TimeSpan.FromMilliseconds(220);
+    private readonly DispatcherTimer _settle;
+    private bool _expanded;
+    private bool _syncing;
+
+    public static readonly DependencyProperty IsOpenProperty = DependencyProperty.Register(
+        nameof(IsOpen), typeof(bool), typeof(ErrorIsland), new PropertyMetadata(false, (d, _) => ((ErrorIsland)d).Sync(replay: false)));
+    public static readonly DependencyProperty TitleProperty = DependencyProperty.Register(
+        nameof(Title), typeof(string), typeof(ErrorIsland), new PropertyMetadata("", (d, e) => ((ErrorIsland)d).TitleChanged((string?)e.OldValue)));
+    public static readonly DependencyProperty MessageProperty = DependencyProperty.Register(
+        nameof(Message), typeof(string), typeof(ErrorIsland), new PropertyMetadata("", (d, _) => ((ErrorIsland)d).UpdateText()));
+    /// <summary>Animatable corner radius; CornerRadius itself is not a double.</summary>
+    private static readonly DependencyProperty RadiusProperty = DependencyProperty.Register(
+        "Radius", typeof(double), typeof(ErrorIsland), new PropertyMetadata(CompactHeight / 2, (d, e) => ((ErrorIsland)d).Pill.CornerRadius = new CornerRadius((double)e.NewValue)));
+
+    public bool IsOpen { get => (bool)GetValue(IsOpenProperty); set => SetValue(IsOpenProperty, value); }
+    public string Title { get => (string)GetValue(TitleProperty); set => SetValue(TitleProperty, value); }
+    public string Message { get => (string)GetValue(MessageProperty); set => SetValue(MessageProperty, value); }
+
+    public ErrorIsland()
+    {
+        InitializeComponent();
+        _settle = new DispatcherTimer(DispatcherPriority.Background) { Interval = Settle };
+        _settle.Tick += (_, _) => { _settle.Stop(); if (IsOpen) Morph(expanded: false); };
+        // Replay the full entrance whenever the panel is reopened with an error showing.
+        IsVisibleChanged += (_, args) =>
+        {
+            if (args.NewValue is true) Sync(replay: true);
+            else _settle.Stop();
+        };
+    }
+
+    private void TitleChanged(string? previous)
+    {
+        UpdateText();
+        // A different error while open opens the island again.
+        if (IsOpen && IsVisible && !string.Equals(previous, Title, StringComparison.Ordinal)) Morph(expanded: true);
+    }
+    private void UpdateText()
+    {
+        CompactText.Text = Title;
+        TitleText.Text = Title;
+        MessageText.Text = Message;
+        Pill.ToolTip = Message.Length > 0 ? Message : null;
+        AutomationProperties.SetName(Pill, Message.Length > 0 ? $"{Title}. {Message}" : Title);
+    }
+
+    private void Sync(bool replay)
+    {
+        // Making the island visible raises IsVisibleChanged, which calls back here.
+        if (_syncing) return;
+        _syncing = true;
+        try { SyncCore(replay); } finally { _syncing = false; }
+    }
+    private void SyncCore(bool replay)
+    {
+        if (IsOpen)
+        {
+            if (Visibility != Visibility.Visible || replay)
+            {
+                Visibility = Visibility.Visible;
+                Snap(CompactWidth - 40, CompactHeight - 6, compact: 0, expanded: 0, scale: Motion.Active ? 0.6 : 1, opacity: Motion.Active ? 0 : 1);
+                Animate(Pill, OpacityProperty, 1, Quick, Motion.EaseOut);
+                AnimateScale(1);
+            }
+            Morph(expanded: true);
+        }
+        else if (Visibility == Visibility.Visible) Close();
+    }
+
+    private void Morph(bool expanded)
+    {
+        _expanded = expanded;
+        _settle.Stop();
+        if (expanded && IsVisible) _settle.Start();
+        var width = expanded ? ExpandedWidth : CompactWidth;
+        var height = expanded ? ExpandedHeight : CompactHeight;
+        if (!Motion.Active) { Snap(width, height, expanded ? 0 : 1, expanded ? 1 : 0, 1, 1); return; }
+        Animate(Pill, WidthProperty, width, Motion.Spring, Motion.SpringCurve);
+        Animate(Pill, HeightProperty, height, Motion.Spring, Motion.SpringCurve);
+        Animate(this, RadiusProperty, expanded ? 24 : CompactHeight / 2, Motion.Spring, Motion.SpringCurve);
+        // Content crossfades: the outgoing layer leaves fast, the incoming one waits a beat.
+        Animate(Compact, OpacityProperty, expanded ? 0 : 1, Quick, Motion.EaseOut, expanded ? TimeSpan.Zero : Quick);
+        Animate(Expanded, OpacityProperty, expanded ? 1 : 0, Quick, Motion.EaseOut, expanded ? Quick : TimeSpan.Zero);
+    }
+
+    private void Close()
+    {
+        _settle.Stop();
+        _expanded = false;
+        if (!Motion.Active) { Visibility = Visibility.Collapsed; return; }
+        Animate(Pill, WidthProperty, CompactWidth - 40, Motion.Spring, Motion.SpringCurve);
+        Animate(Pill, HeightProperty, CompactHeight - 6, Motion.Spring, Motion.SpringCurve);
+        Animate(this, RadiusProperty, (CompactHeight - 6) / 2, Motion.Spring, Motion.SpringCurve);
+        Animate(Compact, OpacityProperty, 0, Quick, Motion.EaseOut);
+        Animate(Expanded, OpacityProperty, 0, Quick, Motion.EaseOut);
+        AnimateScale(0.6);
+        var fade = new DoubleAnimation(0, Quick) { EasingFunction = Motion.EaseOut };
+        fade.Completed += (_, _) => { if (!IsOpen) Visibility = Visibility.Collapsed; };
+        Pill.BeginAnimation(OpacityProperty, fade);
+    }
+
+    private void OnClick(object sender, MouseButtonEventArgs args)
+    {
+        args.Handled = true;
+        Morph(!_expanded);
+    }
+
+    private void Snap(double width, double height, double compact, double expanded, double scale, double opacity)
+    {
+        Pill.BeginAnimation(WidthProperty, null); Pill.Width = width;
+        Pill.BeginAnimation(HeightProperty, null); Pill.Height = height;
+        BeginAnimation(RadiusProperty, null); SetValue(RadiusProperty, Math.Min(height / 2, 24));
+        Compact.BeginAnimation(OpacityProperty, null); Compact.Opacity = compact;
+        Expanded.BeginAnimation(OpacityProperty, null); Expanded.Opacity = expanded;
+        Pill.BeginAnimation(OpacityProperty, null); Pill.Opacity = opacity;
+        var transform = (ScaleTransform)Pill.RenderTransform;
+        transform.BeginAnimation(ScaleTransform.ScaleXProperty, null); transform.ScaleX = scale;
+        transform.BeginAnimation(ScaleTransform.ScaleYProperty, null); transform.ScaleY = scale;
+    }
+    private void AnimateScale(double to)
+    {
+        var transform = (ScaleTransform)Pill.RenderTransform;
+        if (!Motion.Active) { transform.ScaleX = transform.ScaleY = to; return; }
+        Animate(transform, ScaleTransform.ScaleXProperty, to, Motion.Spring, Motion.SpringCurve);
+        Animate(transform, ScaleTransform.ScaleYProperty, to, Motion.Spring, Motion.SpringCurve);
+    }
+    // Animations start from the current (possibly mid-flight) value and hold the end value.
+    private static void Animate(DependencyObject target, DependencyProperty property, double to, TimeSpan duration, IEasingFunction ease, TimeSpan delay = default)
+    {
+        AnimationTimeline animation;
+        if (delay > TimeSpan.Zero)
+        {
+            // Hold the current on-screen value through the delay, then ease to the target.
+            var current = (double)target.GetValue(property);
+            var frames = new DoubleAnimationUsingKeyFrames { Duration = delay + duration };
+            frames.KeyFrames.Add(new DiscreteDoubleKeyFrame(current, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+            frames.KeyFrames.Add(new DiscreteDoubleKeyFrame(current, KeyTime.FromTimeSpan(delay)));
+            frames.KeyFrames.Add(new EasingDoubleKeyFrame(to, KeyTime.FromTimeSpan(delay + duration), ease));
+            animation = frames;
+        }
+        else animation = new DoubleAnimation(to, duration) { EasingFunction = ease };
+        animation.Freeze();
+        ((IAnimatable)target).BeginAnimation(property, animation);
+    }
+}

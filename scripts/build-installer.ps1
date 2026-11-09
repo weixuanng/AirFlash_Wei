@@ -48,6 +48,9 @@ $arguments = @(
     "-p:AppExe=$appExe",
     "-p:AppIcon=$(Join-Path $repoRoot 'desktop/AirFlash.App/Assets/app.ico')",
     "-p:UiLicenseFile=$(Join-Path $repoRoot 'installer/License.rtf')",
+    "-p:EngineExe=$(Join-Path $repoRoot 'native/airflash-engine/target/release/airflash-engine.exe')",
+    "-p:BannerBmp=$(Join-Path $repoRoot 'installer/Assets/banner.bmp')",
+    "-p:DialogBmp=$(Join-Path $repoRoot 'installer/Assets/dialog.bmp')",
     "-p:OutputPath=$outputWithSlash",
     '-p:DebugType=none'
 )

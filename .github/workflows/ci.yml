@@ -57,6 +57,33 @@ jobs:
           $audit = Get-Content artifacts/compatibility/bundle-audit.json -Raw | ConvertFrom-Json
           $audit | Add-Member -NotePropertyName published_exe_sha256 -NotePropertyValue (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant() -Force
           $audit | ConvertTo-Json -Depth 20 | Set-Content artifacts/compatibility/bundle-audit.json -Encoding utf8
+      - name: Build MSI
+        shell: pwsh
+        run: |
+          New-Item dist -ItemType Directory -Force | Out-Null
+          Copy-Item artifacts/compatibility-publish/Airplay.exe dist/Airplay.exe
+          ./scripts/build-installer.ps1 -PublishPath artifacts/compatibility-publish -OutputPath dist
+      - name: Installer lifecycle in disposable runner
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/test-installer.ps1
+      - name: Preserve test installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: airplay-test-build-${{ github.sha }}
+          path: |
+            dist/Airplay.exe
+            dist/Airplay-*.msi
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preserve installer logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-test-logs
+          path: artifacts/installer-test/*.log
+          retention-days: 7
       - name: Preserve compatibility audit
         if: always()
         uses: actions/upload-artifact@v4

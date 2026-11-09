@@ -36,7 +36,9 @@ public partial class ControlPanel : Window
     public void ShowPanel()
     {
         Width = CompactWidth;
+        var opening = !IsVisible;
         Show(); RequestPlacement(); Activate();
+        if (opening) Motion.EnterPanel(Card);
     }
     public void RequestPlacement()
     {

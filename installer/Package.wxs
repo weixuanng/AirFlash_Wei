@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
-     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
+     xmlns:fw="http://wixtoolset.org/schemas/v4/wxs/firewall">
   <Package Name="Airplay"
            Manufacturer="Airplay"
            Version="$(var.ProductVersion)"
@@ -30,7 +31,19 @@
     <Icon Id="ApplicationIcon" SourceFile="$(var.AppIcon)"/>
     <Property Id="ARPPRODUCTICON" Value="ApplicationIcon"/>
     <WixVariable Id="WixUILicenseRtf" Value="$(var.UiLicenseFile)"/>
-    <ui:WixUI Id="WixUI_FeatureTree"/>
+    <WixVariable Id="WixUIBannerBmp" Value="$(var.BannerBmp)"/>
+    <WixVariable Id="WixUIDialogBmp" Value="$(var.DialogBmp)"/>
+
+    <!-- One screen to install, then an optional launch. Shortcuts stay separate
+         features, so ADDLOCAL/REMOVE still choose them on the command line. -->
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Open Airplay now"/>
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1"/>
+    <Property Id="WixShellExecTarget" Value="[#ApplicationExe]"/>
+    <CustomAction Id="LaunchAirplay" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)" DllEntry="WixShellExec" Impersonate="yes"/>
+    <UI>
+      <ui:WixUI Id="WixUI_Minimal"/>
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchAirplay" Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed"/>
+    </UI>
 
     <Property Id="AIRPLAY_OS_BUILD">
       <RegistrySearch Id="ReadWindowsBuild" Root="HKLM" Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion" Name="CurrentBuildNumber" Type="raw" Bitness="always64"/>
@@ -56,6 +69,31 @@
               Source="$(var.AppExe)"
               KeyPath="yes"
               Checksum="yes"/>
+      </Component>
+      <!-- The same engine Airplay.exe embeds, at a fixed path the firewall rule can name.
+           Without it the engine runs from a per-user folder that changes with every
+           update, and Windows Firewall asks again each time. -->
+      <Component Id="EngineComponent" Guid="{FB74A546-CD87-4AA7-9E52-0EB5D1E144EB}">
+        <File Id="EngineExe"
+              Name="airflash-engine.exe"
+              Source="$(var.EngineExe)"
+              KeyPath="yes"
+              Checksum="yes">
+          <fw:FirewallException Id="EngineFirewall"
+                                Name="Airplay audio engine"
+                                Description="Lets HomePods on your local network reach Airplay for clock sync and audio."
+                                Scope="localSubnet"
+                                IgnoreFailure="yes"/>
+        </File>
+      </Component>
+      <!-- Owned by the MSI so uninstall removes it; the app writes the same value at launch. -->
+      <Component Id="AutostartComponent" Guid="{816714DD-9A9B-4DCD-B0F6-2F383136D896}">
+        <RegistryValue Root="HKCU"
+                       Key="Software\Microsoft\Windows\CurrentVersion\Run"
+                       Name="Airplay"
+                       Type="string"
+                       Value="&quot;[INSTALLFOLDER]Airplay.exe&quot; --startup"
+                       KeyPath="yes"/>
       </Component>
     </DirectoryRef>
 
@@ -101,6 +139,8 @@
              AllowAbsent="no"
              ConfigurableDirectory="INSTALLFOLDER">
       <ComponentRef Id="ApplicationComponent"/>
+      <ComponentRef Id="EngineComponent"/>
+      <ComponentRef Id="AutostartComponent"/>
       <Feature Id="DesktopShortcutFeature"
                Title="Desktop shortcut"
                Description="Create an Airplay shortcut on the desktop"
