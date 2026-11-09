@@ -18,7 +18,7 @@ function Reserve-ReleaseVersion([string]$Root, [string]$RequestedVersion = '', [
     if ($LASTEXITCODE -ne 0 -or $dirty) { throw 'Release builds require a clean tracked tree.' }
     $head = & git -C $Root rev-parse HEAD
     $remote = & git -C $Root remote get-url origin 2>$null
-    if ($LASTEXITCODE -ne 0 -or $remote -notmatch '^https://github\.com/Ding-Kyoma/AirFlash(?:\.git)?$') { throw 'Configure the AirFlash origin before reserving a release.' }
+    if ($LASTEXITCODE -ne 0 -or $remote -notmatch '^https://github\.com/weixuanng/AirFlash_Wei(?:\.git)?$') { throw 'Configure the AirFlash origin before reserving a release.' }
     $refs = & git -C $Root ls-remote --tags origin
     if ($LASTEXITCODE -ne 0) { throw 'Cannot read remote version reservations.' }
     $versions = @([Version]'0.2.3') # Preserve the pre-GitHub local release floor.

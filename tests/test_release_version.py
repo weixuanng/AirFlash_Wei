@@ -23,7 +23,7 @@ function git {
         'branch' { $script:releaseCase.branch }
         'status' { if ($script:releaseCase.dirty) { ' M tracked.txt' } }
         'rev-parse' { $script:releaseCase.head }
-        'remote' { 'https://github.com/Ding-Kyoma/AirFlash.git' }
+        'remote' { 'https://github.com/weixuanng/AirFlash_Wei.git' }
         'ls-remote' { $script:releaseCase.refs }
         'push' {
             $script:pushes.Add(@($args))
