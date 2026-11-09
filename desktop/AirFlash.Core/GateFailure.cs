@@ -5,7 +5,7 @@ public enum GateFailureKind
 {
     /// <summary>No actionable evidence; keep the engine's own fault detail.</summary>
     None,
-    /// <summary>TXT proves the receiver is classic-only, so AirFlash cannot stream to it today.</summary>
+    /// <summary>TXT proves the receiver is classic-only, so Airplay cannot stream to it today.</summary>
     ClassicOnly,
     /// <summary>
     /// Password/pairing failure, or any authentication failure the desktop cannot
@@ -17,7 +17,7 @@ public enum GateFailureKind
     Network,
     /// <summary>
     /// The engine refused a group that mixes AirPlay 2 and classic devices before
-    /// any SETUP (QUESTIONS Q39). Like WAC, AirFlash does not downgrade such a
+    /// any SETUP (QUESTIONS Q39). Like WAC, Airplay does not downgrade such a
     /// group; the user has to connect the two device types separately.
     /// </summary>
     MixedTimingGroup
@@ -72,11 +72,11 @@ public static class GateFailure
         // The only MFi-specific behaviour is friendlier wording for a failure the
         // desktop cannot actually distinguish from a generic authentication error.
         if (kind == GateFailureKind.PasswordOrPairing && LooksLikeMfi(notice))
-            return L.Get("This device requires MFi authentication, which AirFlash cannot perform without Apple hardware.");
+            return L.Get("This device requires MFi authentication, which Airplay cannot perform without Apple hardware.");
         return kind switch
         {
-            GateFailureKind.ClassicOnly => L.Get("This device only supports classic AirPlay. AirFlash cannot stream to it yet."),
-            GateFailureKind.PasswordOrPairing => L.Get("This device requires a password or pairing that AirFlash could not complete. Pair it again in Receivers."),
+            GateFailureKind.ClassicOnly => L.Get("This device only supports classic AirPlay. Airplay cannot stream to it yet."),
+            GateFailureKind.PasswordOrPairing => L.Get("This device requires a password or pairing that Airplay could not complete. Pair it again in Receivers."),
             GateFailureKind.Network => L.Get("Could not reach the receiver over the network. Check that it is powered on and on the same network as this PC."),
             GateFailureKind.MixedTimingGroup => MixedGroupMessage.For(receiver?.Peers ?? []),
             _ => null

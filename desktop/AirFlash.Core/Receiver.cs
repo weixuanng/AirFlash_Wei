@@ -34,7 +34,7 @@ public sealed record Receiver(string Id, string Name, string Address, int Port =
         AirPlayCapability.ClaimsAirPlay2Outdated => L.Get("AirPlay 2 claimed, firmware too old"),
         _ => L.Get("AirPlay 2 support unknown")
     };
-    private string BaseDetail => Model.Length > 0 ? Model : L.Get("AirFlash receiver");
+    private string BaseDetail => Model.Length > 0 ? Model : L.Get("Airplay receiver");
     public string Detail => IsSoftwareGroup ? L.Get("Software stereo · experimental") : IsGroup ? L.Format("HomePod stereo · {0}/2", Members.Length) : $"{BaseDetail} · {CapabilityDetail}";
     [JsonIgnore] public IEnumerable<Receiver> Peers => IsGroup ? Members : [this];
     public string TransportKey => string.Join(";", Peers.OrderBy(p => p.Address, StringComparer.Ordinal).ThenBy(p => p.Port).Select(p => $"{p.Address}:{p.Port}:{(IsGroup && p.IsLeader)}:{p.Channel}:{p.SyncOffsetMs}"));

@@ -47,7 +47,7 @@ public static class AirPlayEvidence
 /// every member's TXT record is available.
 ///
 /// Stereo pairs: this deliberately does NOT copy WinAirCast's
-/// <c>!IsCustomStereoPair</c> exemption. AirFlash's user-built software stereo
+/// <c>!IsCustomStereoPair</c> exemption. Airplay's user-built software stereo
 /// group is two independent receivers joined by this app (channel plus
 /// per-member offset) and sent to the engine as <c>software_stereo</c> peers;
 /// there is no <c>SetStereoPair</c> hand-off that makes the pair one logical

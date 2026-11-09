@@ -2,7 +2,7 @@ using System;
 namespace AirFlash.Core;
 
 /// <summary>
-/// How much audio AirFlash holds at the receiver, and how far it may be tightened.
+/// How much audio Airplay holds at the receiver, and how far it may be tightened.
 /// </summary>
 /// <remarks>
 /// Adaptive solo ALAC/PTP and stereo playback request a 50 ms starting lead.
