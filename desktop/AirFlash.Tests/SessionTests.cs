@@ -831,7 +831,7 @@ public sealed class SessionTests
         var first = new FakeConnection(); var second = new FakeConnection();
         var factory = new FakeFactory(first, second); var audio = new FakeAudio();
         await using var controller = new SessionController(factory, audio, timing: Fast);
-        var settings = Settings(); settings.ForceReconnect = true;
+        var settings = Settings(); settings.ForceReconnect = true; settings.ResumeAfterTakeover = false;
         await controller.StartAsync(Pod(), settings, SessionStartIntent.Automatic);
         await Until(() => controller.Snapshot.State == PlaybackState.Streaming);
         Assert.Equal("automatic", first.Commands.Single(c => c.Command == "start").Parameters.Text("intent"));
@@ -851,6 +851,71 @@ public sealed class SessionTests
         await Until(() => controller.Snapshot.State == PlaybackState.Streaming);
         Assert.False(controller.RequiresManualReconnect); Assert.Equal(2, factory.OpenCount);
         Assert.Equal("manual", second.Commands.Single(c => c.Command == "start").Parameters.Text("intent"));
+    }
+    [Fact]
+    public async Task TakeoverYieldsQuietlyAndResumesAutomaticallyOnceTheSpeakerIsFree()
+    {
+        // No level meter is involved: the muted laptop retries on the backoff
+        // schedule and the engine's automatic probe decides when the speaker is free.
+        var first = new FakeConnection(); var second = new FakeConnection(false); var third = new FakeConnection();
+        var factory = new FakeFactory(first, second, third); var audio = new ActivityAudio();
+        await using var controller = new SessionController(factory, audio, timing: Fast with { Yield = TimeSpan.FromMilliseconds(20) });
+        var settings = Settings();
+        Assert.True(settings.ResumeAfterTakeover);
+        var afterYield = new ConcurrentQueue<PlaybackState>(); var yielded = false;
+        controller.Changed += snapshot => { if (yielded) afterYield.Enqueue(snapshot.State); };
+        await controller.StartAsync(Pod(), settings);
+        await Until(() => controller.Snapshot.State == PlaybackState.Streaming && audio.Muted);
+        var restores = audio.Restores;
+        first.EmitData(new { @event = "error", code = "preempted", reason = "takeover", channel = "control", host = "127.0.0.1", retryable = false, message = "Another controller took over this receiver" });
+        await Until(() => first.Disposed && controller.IsYielding && controller.Snapshot.State == PlaybackState.Preempted);
+        yielded = true;
+        Assert.True(controller.YieldedToOtherDevice);
+        Assert.False(controller.RequiresManualReconnect);
+        Assert.Equal(PlaybackState.Preempted, controller.Snapshot.State);
+        Assert.Equal(L.Get("Playing on another device. AirFlash will resume when the speaker is free."), controller.Snapshot.Message);
+        // The laptop speakers stay muted while waiting, never released in between.
+        Assert.True(audio.Muted); Assert.Equal(restores, audio.Restores);
+        // After one backoff step it retries on its own, but the speaker is still
+        // busy: the automatic probe blocks it and the wait continues.
+        await second.Started.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.Equal("automatic", second.Commands.Single(c => c.Command == "start").Parameters.Text("intent"));
+        second.EmitData(new { @event = "warning", channel = "preemption", code = "automatic_start_probe", host = "127.0.0.1", round = 1, recovered = false, message = "Automatic start ownership check: busy_elsewhere" });
+        second.EmitData(new { @event = "error", code = "ownership_unconfirmed", channel = "preemption", host = "127.0.0.1", retryable = false, message = "receiver busy" });
+        // The speaker became free: the next automatic start streams again.
+        await Until(() => controller.Snapshot.State == PlaybackState.Streaming);
+        Assert.False(controller.IsYielding); Assert.False(controller.YieldedToOtherDevice); Assert.False(controller.RequiresManualReconnect);
+        Assert.Equal(3, factory.OpenCount);
+        Assert.Equal("automatic", third.Commands.Single(c => c.Command == "start").Parameters.Text("intent"));
+        Assert.DoesNotContain(PlaybackState.Connecting, afterYield);
+        Assert.DoesNotContain(PlaybackState.Error, afterYield);
+        Assert.True(audio.Muted); Assert.Equal(restores, audio.Restores);
+    }
+    [Fact]
+    public async Task StoppingWhileWaitingForTheSpeakerRestoresLocalSound()
+    {
+        var first = new FakeConnection();
+        var factory = new FakeFactory(first); var audio = new ActivityAudio();
+        // A long backoff step keeps the controller inside the wait when Stop arrives.
+        await using var controller = new SessionController(factory, audio, timing: Fast with { Yield = TimeSpan.FromSeconds(30) });
+        await controller.StartAsync(Pod(), Settings());
+        await Until(() => controller.Snapshot.State == PlaybackState.Streaming && audio.Muted);
+        first.EmitData(new { @event = "error", code = "preempted", reason = "takeover", channel = "control", host = "127.0.0.1", retryable = false, message = "Another controller took over this receiver" });
+        await Until(() => first.Disposed && controller.Snapshot.State == PlaybackState.Preempted);
+        Assert.True(audio.Muted);
+        await controller.StopAsync();
+        Assert.False(controller.IsYielding);
+        Assert.False(audio.Muted);
+    }
+    private sealed class ActivityAudio : IAudioService
+    {
+        public volatile bool Muted;
+        public int Restores;
+        public event Action? EndpointsChanged { add { } remove { } }
+        public Task<string?> GetDefaultEndpointIdAsync() => Task.FromResult<string?>("default");
+        public Task<IReadOnlyList<AudioEndpoint>> GetEndpointsAsync() => Task.FromResult<IReadOnlyList<AudioEndpoint>>([]);
+        public Task MuteAsync(string? endpointId) { Muted = true; return Task.CompletedTask; }
+        public Task RestoreAsync() { Interlocked.Increment(ref Restores); Muted = false; return Task.CompletedTask; }
     }
     [Fact]
     public async Task ClockFaultLoopDoesNotReplenishRetriesFromStreamingUptime()
