@@ -15,3 +15,10 @@ Windows-to-HomePod Mini 2 build.
 - Upstream license and attribution kept (LICENSE-GPLv3).
 
 Work happens on `claude/*` branches, PRs into `main`, CI on Windows runners.
+
+## CI
+
+- GitHub Actions enabled on the fork 9 Nov 2026 (workflows are disabled by
+  default on a forked repo). This commit triggers the first CI run on the
+  branch, since enabling Actions does not retroactively run CI for earlier
+  commits.
