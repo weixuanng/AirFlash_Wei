@@ -155,6 +155,10 @@ public sealed class AppSettings : ObservableObject
         return options.LatencyMode is not null || options.ForceLatency is not null || LatencyMode == "custom" && options.CustomBufferMs is not null;
     });
     public string? EffectiveEndpoint => CaptureMode == "endpoint" ? CaptureEndpoint : null;
+    /// <summary>The name the engine captures by. "system" asks it for every application's
+    /// audio taken before the playback device's volume and mute, so the PC can stay muted.</summary>
+    public const string SystemCapture = "@system";
+    public string? EngineCaptureEndpoint => CaptureMode == "system" ? SystemCapture : EffectiveEndpoint;
     public string? Validate()
     {
         if (Receivers is null || ReceiverAliases is null || ManualReceivers is null || SoftwareGroups is null
@@ -169,7 +173,7 @@ public sealed class AppSettings : ObservableObject
         if (Equalizer.Validate() is { } equalizerError) return equalizerError;
         if (CustomBufferMs is < 0 or > 2000) return L.Get("Custom latency must be between 0 and 2000 ms.");
         if (!double.IsFinite(StandbySilenceSeconds) || StandbySilenceSeconds is < 5 or > 300) return L.Get("Standby threshold must be between 5 and 300 seconds.");
-        if (CaptureMode is not ("loopback" or "endpoint" or "application")) return L.Get("Select a valid capture mode.");
+        if (CaptureMode is not ("loopback" or "endpoint" or "application" or "system")) return L.Get("Select a valid capture mode.");
         if (CaptureMode == "endpoint" && string.IsNullOrWhiteSpace(CaptureEndpoint)) return L.Get("Select a capture endpoint.");
         if (CaptureMode == "application" && string.IsNullOrWhiteSpace(CaptureApplicationPath)) return L.Get("Select an application.");
         foreach (var options in Receivers.Values)

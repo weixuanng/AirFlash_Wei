@@ -1,13 +1,23 @@
-# Airplay 0.2.10
+# Airplay 0.2.11
 
-Changes since Airplay 0.2.9.
+Changes since Airplay 0.2.10.
 
-## Sound Glow
+## Volume
 
-- **Airplay now sends the artwork of what is playing to the HomePod.** A HomePod takes its Sound Glow colours from the artwork of the current track. Airplay already sent the title and artist but no artwork, so the glow kept the colours of whatever played before. Airplay now takes the thumbnail Windows has for the playing media, shrinks it to at most 512 pixels, and sends it with each new track.
-- Colours can only follow media that gives Windows a thumbnail: Spotify, Apple Music, and video in Chrome or Edge usually do. Games and many other apps do not.
-- Whether the HomePod uses artwork from Airplay for Sound Glow has not been tested on a real HomePod. The log has a `Now Playing artwork` line for what was sent and how the HomePod answered.
+- **The volume now follows the slider while you drag it.** Before, the HomePod only changed once you stopped moving. Changes now go out as you drag, a few times a second.
+- **The slider is a thick rounded bar that fills as you drag**, in the style of iOS Control Centre. Click or drag anywhere on it, or use the mouse wheel or arrow keys.
+- The slider no longer disappears for a moment when one volume reading fails.
 
-Run **Airplay-0.2.10.msi** to install or upgrade. The portable **Airplay.exe** still works but does not get the firewall rule. Verify downloads with **SHA256SUMS.txt**. Binaries are unsigned, so Windows SmartScreen may ask you to confirm the first run.
+## Stutter
+
+- **New option: Stable connection (adds delay).** A log from a ten-minute session showed 221 lost packets, 83 of which could not be re-sent in time with the 120 ms buffer. This option asks for a 500 ms buffer to give them time. Sound then runs about half a second behind video, so leave it off for video and turn it on for music.
+
+## Capture
+
+- **New option: Capture apps directly.** Takes audio from apps before the PC speakers, which is meant to let the PC stay muted without a silent output device. Whether it does on your PC is untested, so it is off by default: turn it off again if the HomePod goes silent. Needs Windows build 20348 or later.
+
+None of this has been tested against a real HomePod.
+
+Run **Airplay-0.2.11.msi** to install or upgrade. The portable **Airplay.exe** still works but does not get the firewall rule. Verify downloads with **SHA256SUMS.txt**. Binaries are unsigned, so Windows SmartScreen may ask you to confirm the first run.
 
 Logs are in `%APPDATA%\Airplay\logs`.

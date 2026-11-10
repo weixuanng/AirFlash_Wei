@@ -1392,7 +1392,7 @@ public sealed class SessionTests
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15)); while (!predicate()) await Task.Delay(5, timeout.Token);
     }
     [Fact]
-    public async Task DeviceVolumeReadsWithoutWritingAndDebouncesLatestTarget()
+    public async Task DeviceVolumeReadsWithoutWritingAndFollowsTheLatestTarget()
     {
         var process = new FakeConnection(); await using var controller = new SessionController(new FakeFactory(process), new FakeAudio(), timing: SessionTiming.Default);
         await controller.StartAsync(Pod(), Settings()); await Until(() => controller.Snapshot.State == PlaybackState.Streaming);
@@ -1404,8 +1404,12 @@ public sealed class SessionTests
         Assert.DoesNotContain(process.Commands, c => c.Command == "set_device_volume");
         var first = controller.SetDeviceVolumeAsync("a", 40);
         var last = controller.SetDeviceVolumeAsync("a", 55);
-        await Until(() => process.Commands.Any(c => c.Command == "set_device_volume"));
-        var command = Assert.Single(process.Commands, c => c.Command == "set_device_volume");
+        // The level follows a drag: the first change may go out at once, and the
+        // latest one always follows within the send interval.
+        await Until(() => process.Commands.Any(c => c.Command == "set_device_volume" && c.Parameters.Number("volume") == 55));
+        var sent = process.Commands.Where(c => c.Command == "set_device_volume").ToArray();
+        Assert.InRange(sent.Length, 1, 2);
+        var command = sent[^1];
         Assert.Equal(55, command.Parameters.Number("volume"));
         var sequence = command.Parameters.Integer("sequence");
         process.EmitData(new { @event = "device_volume", host = "127.0.0.1", volume = 28, sequence, status = "pending", available = true });

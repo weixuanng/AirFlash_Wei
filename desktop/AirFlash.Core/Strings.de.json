@@ -388,5 +388,9 @@
   "The audio engine could not stop. Try disconnecting again.": "Die Audio-Engine konnte nicht beendet werden. Versuchen Sie erneut, die Verbindung zu trennen.",
   "In the Home app, set speaker access to “Everyone,” then try again.": "Legen Sie in der Home-App den Lautsprecherzugriff auf „Alle“ fest, und versuchen Sie es dann erneut.",
   "Receiver session ownership could not be confirmed. Automatic recovery is paused. Reconnect manually to continue.": "Die Sitzung des Empfängers konnte nicht bestätigt werden. Die automatische Wiederherstellung ist pausiert. Verbinden Sie sich manuell erneut, um fortzufahren.",
-  "Speaker volume": "Lautsprecherlautstärke"
+  "Speaker volume": "Lautsprecherlautstärke",
+  "Stable connection (adds delay)": "Stabile Verbindung (mehr Verzögerung)",
+  "Uses a longer buffer so brief Wi-Fi losses do not stutter. Sound runs about half a second behind video.": "Verwendet einen längeren Puffer, damit kurze WLAN-Aussetzer nicht stottern. Der Ton liegt etwa eine halbe Sekunde hinter dem Bild.",
+  "Capture apps directly": "Apps direkt aufnehmen",
+  "Takes audio from apps before the PC speakers, so the PC can stay muted. Turn off if the speaker goes silent.": "Nimmt den Ton der Apps vor den PC-Lautsprechern ab, sodass der PC stumm bleiben kann. Ausschalten, falls der Lautsprecher verstummt."
 }

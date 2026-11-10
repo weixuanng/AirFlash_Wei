@@ -18,6 +18,46 @@ public partial class ControlPanel : Window
     private DispatcherOperation? _placement;
     private DateTime _lastDismissed;
     public bool MenuOpen { get; set; }
+    // The volume pill has no thumb: the pointer sets the level anywhere along it,
+    // and keeps setting it while the button is held.
+    private void VolumeSlider_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        var slider = (System.Windows.Controls.Slider)sender;
+        var radius = slider.ActualHeight / 2;
+        slider.Clip = new System.Windows.Media.RectangleGeometry(new Rect(0, 0, slider.ActualWidth, slider.ActualHeight), radius, radius);
+    }
+    private static void SetVolumeFromPointer(System.Windows.Controls.Slider slider, MouseEventArgs e)
+    {
+        if (slider.ActualWidth <= 0) return;
+        var fraction = Math.Clamp(e.GetPosition(slider).X / slider.ActualWidth, 0, 1);
+        slider.Value = Math.Round(slider.Minimum + fraction * (slider.Maximum - slider.Minimum));
+    }
+    private void VolumeSlider_Down(object sender, MouseButtonEventArgs e)
+    {
+        var slider = (System.Windows.Controls.Slider)sender;
+        if (!slider.CaptureMouse()) return;
+        SetVolumeFromPointer(slider, e);
+        e.Handled = true;
+    }
+    private void VolumeSlider_Move(object sender, MouseEventArgs e)
+    {
+        var slider = (System.Windows.Controls.Slider)sender;
+        if (slider.IsMouseCaptured && e.LeftButton == MouseButtonState.Pressed) SetVolumeFromPointer(slider, e);
+    }
+    private void VolumeSlider_Up(object sender, MouseButtonEventArgs e)
+    {
+        var slider = (System.Windows.Controls.Slider)sender;
+        if (!slider.IsMouseCaptured) return;
+        SetVolumeFromPointer(slider, e);
+        slider.ReleaseMouseCapture();
+        e.Handled = true;
+    }
+    private void VolumeSlider_Wheel(object sender, MouseWheelEventArgs e)
+    {
+        var slider = (System.Windows.Controls.Slider)sender;
+        slider.Value = Math.Clamp(slider.Value + Math.Sign(e.Delta) * 4, slider.Minimum, slider.Maximum);
+        e.Handled = true;
+    }
     public TrayService? Tray { get; set; }
     public event Action? QuitRequested;
     public ControlPanel(AppViewModel viewModel)

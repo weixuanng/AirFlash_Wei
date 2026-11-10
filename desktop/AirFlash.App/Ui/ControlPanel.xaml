@@ -163,7 +163,8 @@
           <Viewbox Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,10,0">
             <Path Data="M3,9 L7,9 L12,5 L12,19 L7,15 L3,15 Z M15,9 C16.5,10.5 16.5,13.5 15,15 M17.5,6.5 C20.5,9.5 20.5,14.5 17.5,17.5" Stroke="{DynamicResource MutedBrush}" StrokeThickness="1.6" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Fill="Transparent" Width="24" Height="24"/>
           </Viewbox>
-          <Slider x:Name="VolumeSlider" Grid.Column="1" Style="{StaticResource VolumeSlider}" Minimum="0" Maximum="100" SmallChange="2" LargeChange="10" IsMoveToPointEnabled="True" VerticalAlignment="Center"
+          <Slider x:Name="VolumeSlider" Grid.Column="1" Style="{StaticResource VolumeSlider}" Minimum="0" Maximum="100" SmallChange="2" LargeChange="10" VerticalAlignment="Center"
+                  PreviewMouseLeftButtonDown="VolumeSlider_Down" PreviewMouseMove="VolumeSlider_Move" PreviewMouseLeftButtonUp="VolumeSlider_Up" PreviewMouseWheel="VolumeSlider_Wheel" SizeChanged="VolumeSlider_SizeChanged"
                   Value="{Binding DeviceVolume, Mode=TwoWay}" ToolTip="{loc:Text 'Speaker volume'}" AutomationProperties.Name="{loc:Text 'Speaker volume'}"/>
           <TextBlock Grid.Column="2" Text="{Binding DeviceVolumeText}" Style="{StaticResource Hint}" TextAlignment="Right" VerticalAlignment="Center"/>
         </Grid>
@@ -188,6 +189,11 @@
             <TextBlock Text="{Binding PrimaryLabel}" VerticalAlignment="Center" MaxWidth="230" TextTrimming="CharacterEllipsis" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"/>
           </StackPanel>
         </Button>
+        <!-- Two choices that trade something for robustness; both are off by default. -->
+        <StackPanel x:Name="OptionsRow" Margin="6,0,6,8">
+          <CheckBox x:Name="StableOption" IsChecked="{Binding StableConnection, Mode=TwoWay}" Content="{loc:Text 'Stable connection (adds delay)'}" ToolTip="{loc:Text 'Uses a longer buffer so brief Wi-Fi losses do not stutter. Sound runs about half a second behind video.'}" Margin="0,0,0,6"/>
+          <CheckBox x:Name="DirectCaptureOption" IsChecked="{Binding DirectCapture, Mode=TwoWay}" IsEnabled="{Binding DirectCaptureAvailable}" Content="{loc:Text 'Capture apps directly'}" ToolTip="{loc:Text 'Takes audio from apps before the PC speakers, so the PC can stay muted. Turn off if the speaker goes silent.'}"/>
+        </StackPanel>
         <DockPanel>
           <Ellipse Width="8" Height="8" Margin="0,0,7,0" VerticalAlignment="Center" loc:Motion.Breathe="{Binding StatusBusy}">
             <Ellipse.Style>
