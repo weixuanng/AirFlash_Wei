@@ -388,5 +388,9 @@
   "The audio engine could not stop. Try disconnecting again.": "音频引擎未能停止，请再次尝试断开连接。",
   "In the Home app, set speaker access to “Everyone,” then try again.": "请在家庭App中，将扬声器访问权限设置为所有人，然后重试。",
   "Receiver session ownership could not be confirmed. Automatic recovery is paused. Reconnect manually to continue.": "无法确认接收器当前会话，已暂停自动恢复。请手动重新连接以继续播放。",
-  "Speaker volume": "扬声器音量"
+  "Speaker volume": "扬声器音量",
+  "Stable connection (adds delay)": "稳定连接（增加延迟）",
+  "Uses a longer buffer so brief Wi-Fi losses do not stutter. Sound runs about half a second behind video.": "使用更长的缓冲，短暂的 Wi-Fi 丢包不会造成卡顿。声音会比画面晚约半秒。",
+  "Capture apps directly": "直接采集应用音频",
+  "Takes audio from apps before the PC speakers, so the PC can stay muted. Turn off if the speaker goes silent.": "在电脑扬声器之前采集应用音频，电脑可以保持静音。如果音箱没有声音，请关闭此项。"
 }

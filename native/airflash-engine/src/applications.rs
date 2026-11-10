@@ -318,6 +318,19 @@ impl IActivateAudioInterfaceCompletionHandler_Impl for Activation_Impl {
     }
 }
 pub fn activate(pid: u32, stop: &AtomicBool) -> Result<IAudioClient> {
+    activate_mode(pid, PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE, stop)
+}
+/// Everything the system plays except this engine's own process tree. Process
+/// loopback taps application streams before the endpoint's volume and mute, so
+/// the PC's speakers can be muted without silencing what is captured.
+pub fn activate_system(stop: &AtomicBool) -> Result<IAudioClient> {
+    activate_mode(
+        std::process::id(),
+        PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE,
+        stop,
+    )
+}
+fn activate_mode(pid: u32, mode: PROCESS_LOOPBACK_MODE, stop: &AtomicBool) -> Result<IAudioClient> {
     ensure!(
         supported(),
         "Application capture requires Windows build 20348 or later. Use a virtual audio endpoint on this Windows version."
@@ -330,7 +343,7 @@ pub fn activate(pid: u32, stop: &AtomicBool) -> Result<IAudioClient> {
             Anonymous: AUDIOCLIENT_ACTIVATION_PARAMS_0 {
                 ProcessLoopbackParams: AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS {
                     TargetProcessId: pid,
-                    ProcessLoopbackMode: PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE,
+                    ProcessLoopbackMode: mode,
                 },
             },
         },

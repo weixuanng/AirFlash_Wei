@@ -295,28 +295,28 @@
         <Setter Property="FontSize" Value="16"/>
         <Setter Property="ToolTipService.ShowDuration" Value="5000"/>
       </Style>
+      <!-- A thick pill that fills as it is dragged, as in iOS Control Centre. The panel
+           clips it to rounded ends and moves it with the pointer anywhere on its length. -->
       <Style x:Key="VolumeSlider" TargetType="Slider">
-        <Setter Property="Height" Value="22"/>
-        <Setter Property="Focusable" Value="True"/>
+        <Setter Property="Height" Value="26"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="Template">
           <Setter.Value>
             <ControlTemplate TargetType="Slider">
-              <Grid Background="Transparent">
-                <Border Height="4" CornerRadius="2" Background="{DynamicResource LineBrush}" VerticalAlignment="Center"/>
+              <Grid Background="{DynamicResource LineBrush}">
                 <Track x:Name="PART_Track">
                   <Track.DecreaseRepeatButton>
-                    <RepeatButton Command="Slider.DecreaseLarge" Focusable="False" IsTabStop="False">
+                    <RepeatButton Focusable="False" IsTabStop="False" IsHitTestVisible="False">
                       <RepeatButton.Template>
                         <ControlTemplate TargetType="RepeatButton">
-                          <Grid Background="Transparent">
-                            <Border Height="4" CornerRadius="2" Background="{DynamicResource AccentBrush}" VerticalAlignment="Center"/>
-                          </Grid>
+                          <Border Background="{DynamicResource AccentBrush}"/>
                         </ControlTemplate>
                       </RepeatButton.Template>
                     </RepeatButton>
                   </Track.DecreaseRepeatButton>
                   <Track.IncreaseRepeatButton>
-                    <RepeatButton Command="Slider.IncreaseLarge" Focusable="False" IsTabStop="False">
+                    <RepeatButton Focusable="False" IsTabStop="False" IsHitTestVisible="False">
                       <RepeatButton.Template>
                         <ControlTemplate TargetType="RepeatButton">
                           <Border Background="Transparent"/>
@@ -325,16 +325,25 @@
                     </RepeatButton>
                   </Track.IncreaseRepeatButton>
                   <Track.Thumb>
-                    <Thumb>
+                    <Thumb Width="0" IsHitTestVisible="False" Focusable="False">
                       <Thumb.Template>
                         <ControlTemplate TargetType="Thumb">
-                          <Ellipse Width="16" Height="16" Fill="White" Stroke="{DynamicResource LineBrush}" StrokeThickness="1"/>
+                          <Border/>
                         </ControlTemplate>
                       </Thumb.Template>
                     </Thumb>
                   </Track.Thumb>
                 </Track>
+                <Border x:Name="FocusRing" BorderBrush="{DynamicResource TextBrush}" BorderThickness="2" CornerRadius="13" Visibility="Collapsed"/>
               </Grid>
+              <ControlTemplate.Triggers>
+                <Trigger Property="IsKeyboardFocused" Value="True">
+                  <Setter TargetName="FocusRing" Property="Visibility" Value="Visible"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                  <Setter Property="Opacity" Value="0.5"/>
+                </Trigger>
+              </ControlTemplate.Triggers>
             </ControlTemplate>
           </Setter.Value>
         </Setter>

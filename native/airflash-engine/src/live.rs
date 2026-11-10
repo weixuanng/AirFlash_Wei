@@ -145,8 +145,12 @@ fn warn(state: &Arc<Mutex<State>>, code: &'static str, recovered: bool, message:
         message,
     });
 }
+/// The capture endpoint name that selects [`Target::System`].
+pub const SYSTEM_CAPTURE: &str = "@system";
 enum Target {
     Endpoint(Option<String>),
+    /// All application audio, taken before the endpoint's volume and mute.
+    System,
     Application {
         path: String,
         pinned: Option<(u32, u64)>,
@@ -169,7 +173,12 @@ impl Loopback {
         rate: u32,
         equalizer: crate::equalizer::Control,
     ) -> Result<Self> {
-        Self::start_target(Target::Endpoint(endpoint), rate, equalizer)
+        let target = if endpoint.as_deref() == Some(SYSTEM_CAPTURE) {
+            Target::System
+        } else {
+            Target::Endpoint(endpoint)
+        };
+        Self::start_target(target, rate, equalizer)
     }
     /// Capture one application target. `pinned` is true when the IPC request
     /// named a pid + creation time: while that instance lives, it is the only
@@ -592,6 +601,10 @@ impl Binding {
         initialize_client(&client, capture_flags(flow)?, pointer.0, true)?;
         Self::finish(client, spec, tag, None)
     }
+    fn open_system(stream_rate: u32, stop: &AtomicBool) -> Result<Self> {
+        let client = crate::applications::activate_system(stop)?;
+        Self::open_process_loopback(client, stream_rate, None)
+    }
     fn open_application(
         application: &crate::applications::Application,
         stream_rate: u32,
@@ -599,6 +612,13 @@ impl Binding {
     ) -> Result<Self> {
         let process = crate::applications::Process::verify(application)?;
         let client = crate::applications::activate(application.process_id, stop)?;
+        Self::open_process_loopback(client, stream_rate, Some(process))
+    }
+    fn open_process_loopback(
+        client: IAudioClient,
+        stream_rate: u32,
+        process: Option<crate::applications::Process>,
+    ) -> Result<Self> {
         let spec = WAVEFORMATEX {
             wFormatTag: 1,
             nChannels: 2,
@@ -612,7 +632,7 @@ impl Binding {
             | AUDCLNT_STREAMFLAGS_EVENTCALLBACK
             | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM;
         initialize_client(&client, flags, &spec, false)?;
-        Self::finish(client, spec, spec.wFormatTag, Some(process))
+        Self::finish(client, spec, spec.wFormatTag, process)
     }
     fn format(&self) -> Format {
         Format {
@@ -642,6 +662,7 @@ impl Binding {
 fn bind_target(target: &Target, stream_rate: u32, stop: &AtomicBool) -> Result<Vec<Binding>> {
     match target {
         Target::Endpoint(name) => Ok(vec![Binding::open_endpoint(name.as_deref())?]),
+        Target::System => Ok(vec![Binding::open_system(stream_rate, stop)?]),
         Target::Application { path, pinned } => {
             // A pinned request already carries a verified identity. It may name
             // a process that path discovery intentionally ignores (the engine's
@@ -667,12 +688,8 @@ fn bind_target(target: &Target, stream_rate: u32, stop: &AtomicBool) -> Result<V
                 }
             }
             let candidates = crate::applications::matching(path)?;
-            let plan = crate::applications::bind_plan(
-                path,
-                &candidates,
-                *pinned,
-                MAX_CAPTURE_INSTANCES,
-            );
+            let plan =
+                crate::applications::bind_plan(path, &candidates, *pinned, MAX_CAPTURE_INSTANCES);
             ensure!(!plan.is_empty(), "no running instance of {path}");
             let mut bindings = Vec::with_capacity(plan.len());
             let mut last_error = None;
@@ -683,8 +700,9 @@ fn bind_target(target: &Target, stream_rate: u32, stop: &AtomicBool) -> Result<V
                 }
             }
             if bindings.is_empty() {
-                return Err(last_error
-                    .unwrap_or_else(|| anyhow::anyhow!("no running instance of {path}")));
+                return Err(
+                    last_error.unwrap_or_else(|| anyhow::anyhow!("no running instance of {path}"))
+                );
             }
             Ok(bindings)
         }
@@ -1131,9 +1149,8 @@ fn drain_multi(
             *last_packet = Instant::now();
             *packets += 1;
             state.lock().unwrap().metrics.capture_frames += frames as u64;
-            binding_end = Some(
-                timestamp.saturating_add(frames as u64 * 1_000_000_000 / binding.rate as u64),
-            );
+            binding_end =
+                Some(timestamp.saturating_add(frames as u64 * 1_000_000_000 / binding.rate as u64));
         }
         if let Some(end) = binding_end {
             round_end = Some(round_end.map_or(end, |current| current.min(end)));
@@ -1676,8 +1693,14 @@ pub(crate) mod tests {
         // Output is TPDF-dithered, so a single sample may sit one LSB either side.
         let left = i16::from_be_bytes([last[0], last[1]]);
         let right = i16::from_be_bytes([last[2], last[3]]);
-        assert!((i32::from(left) - i32::from(expected)).abs() <= 1, "{left} vs {expected}");
-        assert!((i32::from(right) + i32::from(expected)).abs() <= 1, "{right} vs -{expected}");
+        assert!(
+            (i32::from(left) - i32::from(expected)).abs() <= 1,
+            "{left} vs {expected}"
+        );
+        assert!(
+            (i32::from(right) + i32::from(expected)).abs() <= 1,
+            "{right} vs -{expected}"
+        );
         assert!(marker.is_some());
     }
     #[test]

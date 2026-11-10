@@ -154,6 +154,9 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
     private readonly Dictionary<string, string> _memberHosts = [];
     private long _volumeSequence;
     private CancellationTokenSource? _volumeEdit;
+    /// <summary>Shortest time between two volume commands while a slider is dragged.</summary>
+    private static readonly TimeSpan VolumeInterval = TimeSpan.FromMilliseconds(150);
+    private long _volumeSentAt;
     public async Task SetDeviceVolumeAsync(string receiverId, int value)
     {
         if (Snapshot.Receiver?.IsSoftwareGroup == true) { await SetMemberVolumeAsync(receiverId, value).ConfigureAwait(false); return; }
@@ -170,7 +173,10 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
         PublishCurrent(epoch);
         try
         {
-            await Task.Delay(200, token).ConfigureAwait(false);
+            // The level follows a drag: a change goes out at once unless one went out
+            // within the last interval, and a newer change replaces one still waiting.
+            var wait = VolumeInterval - Stopwatch.GetElapsedTime(Interlocked.Read(ref _volumeSentAt));
+            if (wait > TimeSpan.Zero && Interlocked.Read(ref _volumeSentAt) != 0) await Task.Delay(wait, token).ConfigureAwait(false);
             await _serial.WaitAsync(token).ConfigureAwait(false);
             try
             {
@@ -181,6 +187,7 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
                     connection = _connection; session = _sessionId;
                 }
                 if (connection is null || session is null) return;
+                Interlocked.Exchange(ref _volumeSentAt, Stopwatch.GetTimestamp());
                 await connection.SendAsync(session, "set_device_volume", new { volume = Math.Clamp(value, 0, 100), sequence }, token).ConfigureAwait(false);
             }
             finally { _serial.Release(); }
@@ -707,7 +714,7 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
                         throw new EngineFailure(new("ownership_guard_required", "", "ipc", L.Get("Incompatible engine protocol version."), false));
                     if (forceLatency && !EngineHandshake.HasCapability(hello, "forced_latency"))
                         throw new EngineFailure(new("forced_latency_unsupported", "", "setup", L.Get("This audio engine does not support forced latency. Update the engine or turn off forced latency."), false));
-                    if (settings.CaptureMode == "application") EngineHandshake.RequireCapabilities(hello, "application_capture");
+                    if (settings.CaptureMode is "application" or "system") EngineHandshake.RequireCapabilities(hello, "application_capture");
                     if (receiver.IsSoftwareGroup) EngineHandshake.RequireCapabilities(hello, "member_volume");
                     var capabilities = await ReceiverCapabilityCatalog.QueryConnectionAsync(connection, session, hello, receiver, cancellation).ConfigureAwait(false);
                     var selected = capabilities.Select(id => ProfileOptions(receiver, receiver.Peers.Single(p => p.Id == id), settings), settings.SampleRate(receiver));
@@ -725,7 +732,7 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
                     await _equalizerWriter.WaitAsync(cancellation).ConfigureAwait(false);
                     try
                     {
-                        var startParameters = JsonSerializer.SerializeToNode(new { peers, group_mode = receiver.IsSoftwareGroup ? "software_stereo" : receiver.IsGroup ? "native_stereo" : "single", group_id = receiver.IsGroup && !receiver.IsSoftwareGroup ? receiver.StereoId : null, source = settings.CaptureMode == "application" ? "application" : "loopback", capture_application_path = settings.CaptureMode == "application" ? settings.CaptureApplicationPath : null, capture_process_id = settings.CaptureMode == "application" ? settings.CaptureApplicationInstance?.ProcessId : null, capture_process_started_at = settings.CaptureMode == "application" ? settings.CaptureApplicationInstance?.StartedAt : null, standby = StandbyParameters(settings, receiver.Id), duration_ms = 0, latency_ms = _adaptiveBase, gain = Gain(receiver), timing = "ptp", capture_endpoint = settings.EffectiveEndpoint, sample_rate = sampleRate, equalizer = EffectiveEqualizer().WireParameters() })!.AsObject();
+                        var startParameters = JsonSerializer.SerializeToNode(new { peers, group_mode = receiver.IsSoftwareGroup ? "software_stereo" : receiver.IsGroup ? "native_stereo" : "single", group_id = receiver.IsGroup && !receiver.IsSoftwareGroup ? receiver.StereoId : null, source = settings.CaptureMode == "application" ? "application" : "loopback", capture_application_path = settings.CaptureMode == "application" ? settings.CaptureApplicationPath : null, capture_process_id = settings.CaptureMode == "application" ? settings.CaptureApplicationInstance?.ProcessId : null, capture_process_started_at = settings.CaptureMode == "application" ? settings.CaptureApplicationInstance?.StartedAt : null, standby = StandbyParameters(settings, receiver.Id), duration_ms = 0, latency_ms = _adaptiveBase, gain = Gain(receiver), timing = "ptp", capture_endpoint = settings.EngineCaptureEndpoint, sample_rate = sampleRate, equalizer = EffectiveEqualizer().WireParameters() })!.AsObject();
                         if (forceLatency) startParameters["force_latency"] = true;
                         startParameters["intent"] = attemptIntent == SessionStartIntent.Manual ? "manual" : "automatic";
                         if (adaptiveMode && _confirmedLeadSupported)

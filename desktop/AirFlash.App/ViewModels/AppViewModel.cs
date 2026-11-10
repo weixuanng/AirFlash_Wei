@@ -45,8 +45,9 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
     public IReadOnlyList<Receiver> AllReceivers => _known.Values.Concat(SoftwareStereo.Resolve(_known.Values, _settings)).OrderBy(r => r.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
     public AppSettings Settings => _settings;
     public SessionSnapshot Snapshot => _snapshot;
-    /// <summary>The speaker reports its own volume and accepts a new one for this session.</summary>
-    public bool VolumeAvailable => _snapshot is { State: PlaybackState.Streaming or PlaybackState.Standby, Receiver.IsSoftwareGroup: false, DeviceVolume.Available: true };
+    /// <summary>The speaker has reported its own volume in this session. One missed
+    /// reading does not hide the control; a change is only sent while it is readable.</summary>
+    public bool VolumeAvailable => _snapshot is { State: PlaybackState.Streaming or PlaybackState.Standby, Receiver.IsSoftwareGroup: false, DeviceVolume.Actual: not null };
     /// <summary>The speaker's own volume, 0 to 100: the level its touch surface changes.</summary>
     public double DeviceVolume
     {
@@ -59,6 +60,33 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
         }
     }
     public string DeviceVolumeText => $"{(int)DeviceVolume}";
+    /// <summary>A 500 ms buffer in place of 120 ms: lost packets have time to be sent
+    /// again, at the cost of more delay behind video.</summary>
+    public bool StableConnection
+    {
+        get => _settings.LatencyMode == "buffered";
+        set
+        {
+            if (value == StableConnection) return;
+            _settings.LatencyMode = value ? "buffered" : "realtime";
+            AppPaths.Log($"Setting stable_connection={value}");
+            Notify(); VolumeChanged();
+        }
+    }
+    /// <summary>Capture application audio directly, before the playback device's volume
+    /// and mute, so the PC's own speakers can stay muted.</summary>
+    public bool DirectCapture
+    {
+        get => _settings.CaptureMode == "system";
+        set
+        {
+            if (value == DirectCapture || _settings.CaptureMode is not ("loopback" or "system")) return;
+            _settings.CaptureMode = value ? "system" : "loopback";
+            AppPaths.Log($"Setting direct_capture={value}");
+            Notify(); VolumeChanged();
+        }
+    }
+    public bool DirectCaptureAvailable => Applications.Supported && _settings.CaptureMode is "loopback" or "system";
     private async Task SetDeviceVolumeAsync(string receiverId, int volume)
     {
         try { await Session.SetDeviceVolumeAsync(receiverId, volume); }
@@ -206,7 +234,9 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
             // the theme follows the system: no UI edits these anymore, so a
             // stale configuration value must never reach the engine or autostart.
             var fixedDefaultsChanged = false;
-            if (_settings.LatencyMode != "realtime") { _settings.LatencyMode = "realtime"; fixedDefaultsChanged = true; }
+            // Two buffers are offered: Real-time (120 ms) and Stable (500 ms).
+            if (_settings.LatencyMode is not ("realtime" or "buffered")) { _settings.LatencyMode = "realtime"; fixedDefaultsChanged = true; }
+            Notify(nameof(StableConnection)); Notify(nameof(DirectCapture));
             if (!_settings.StartAtLogin) { _settings.StartAtLogin = true; fixedDefaultsChanged = true; }
             if (_settings.Theme != "system") { _settings.Theme = "system"; fixedDefaultsChanged = true; }
             foreach (var options in _settings.Receivers.Values)
