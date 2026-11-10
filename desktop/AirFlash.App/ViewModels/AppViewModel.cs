@@ -748,6 +748,8 @@ public sealed class ReceiverViewModel : ObservableObject
     }
     public string Name => Receiver.Name;
     public string Detail => Receiver.Detail;
+    /// <summary>A HomePod, or a pair of them: drawn with the HomePod glyph.</summary>
+    public bool IsHomePod => Receiver.Peers.Append(Receiver).Any(r => r.Model.StartsWith("AudioAccessory", StringComparison.Ordinal) || r.Model.Contains("HomePod", StringComparison.OrdinalIgnoreCase));
     public bool Active => _app.SessionHeld && _app.Snapshot.Receiver?.Id == Receiver.Id;
     public bool IsStopping => _app.IsStopping && _app.Snapshot.Receiver?.Id == Receiver.Id;
     public bool NeedsDisconnect => Active || _app.Session.NeedsCleanup && _app.Snapshot.Receiver?.Id == Receiver.Id;

@@ -50,6 +50,7 @@ public partial class App : Application
         // Verification runs measure final layout; cosmetic entrance motion would
         // leave rows mid-animation (render offset, partial opacity) during checks.
         if (Program.NeedsDiagnosticIsolation(args.Args)) Motion.Enabled = false;
+        else Motion.MatchDisplayRefreshRate();
         try
         {
             L.Initialize(smokeLanguage);

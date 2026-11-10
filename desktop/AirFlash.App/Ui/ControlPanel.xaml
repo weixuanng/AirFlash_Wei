@@ -2,6 +2,8 @@
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:loc="clr-namespace:AirFlash.App.Ui" x:Class="AirFlash.App.Ui.ControlPanel" Title="Airplay" Width="{x:Static loc:ControlPanel.CompactWidth}" SizeToContent="Height" WindowStyle="None" AllowsTransparency="True" Background="Transparent" ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True" UseLayoutRounding="True" SnapsToDevicePixels="True" PreviewKeyDown="OnKeyDown" Deactivated="OnDeactivated" Closing="OnClosing">
   <Window.Resources>
     <!-- Application-owned vectors keep these icons independent of installed fonts. -->
+    <!-- HomePod: a filled orb with a flat top; the ring is cut out so the tile shows through. -->
+    <Geometry x:Key="HomePodIconGeometry">F0 M 6.3,4.4 A 5.7,2.3 0 0 1 17.7,4.4 C 20.8,5.9 22.2,9.4 22.2,12.6 C 22.2,17.2 19.6,21.5 16,21.5 L 8,21.5 C 4.4,21.5 1.8,17.2 1.8,12.6 C 1.8,9.4 3.2,5.9 6.3,4.4 Z M 6.8,4.6 A 5.2,1.9 0 1 0 17.2,4.6 A 5.2,1.9 0 1 0 6.8,4.6 Z M 7.7,4.6 A 4.3,1.25 0 1 0 16.3,4.6 A 4.3,1.25 0 1 0 7.7,4.6 Z</Geometry>
     <Geometry x:Key="ReceiverIconGeometry">M 8,2 H 16 A 3,3 0 0 1 19,5 V 19 A 3,3 0 0 1 16,22 H 8 A 3,3 0 0 1 5,19 V 5 A 3,3 0 0 1 8,2 Z M 15,8 A 3,3 0 1 1 9,8 A 3,3 0 1 1 15,8 Z M 14,16 A 2,2 0 1 1 10,16 A 2,2 0 1 1 14,16 Z</Geometry>
     <Geometry x:Key="PlayIconGeometry">M 6,3 L 21,12 6,21 Z</Geometry>
     <Geometry x:Key="StopIconGeometry">M 4,4 H 20 V 20 H 4 Z</Geometry>
@@ -109,7 +111,7 @@
           <ItemsControl ItemsSource="{Binding Receivers}" loc:Motion.Stagger="True">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Border Padding="10" Margin="0,0,0,8" CornerRadius="14" BorderThickness="1">
+                <Border Padding="10" Margin="0,0,0,8" CornerRadius="14" BorderThickness="1" loc:Motion.Press="True">
                   <Border.ContextMenu>
                     <ContextMenu Style="{StaticResource TextMenu}">
                       <MenuItem Header="{loc:Text 'Hide this speaker'}" Click="HideReceiver_Click"/>
@@ -136,7 +138,22 @@
                     <Border Background="{DynamicResource AccentBrush}" Width="32" Height="32" CornerRadius="8" HorizontalAlignment="Left" VerticalAlignment="Center">
                       <Viewbox Width="18" Height="18" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center">
                         <Grid Width="24" Height="24">
-                          <Path x:Name="ReceiverIcon" Data="{StaticResource ReceiverIconGeometry}" Stroke="{DynamicResource AccentForegroundBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                          <Path x:Name="ReceiverIcon" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round">
+                            <Path.Style>
+                              <Style TargetType="Path">
+                                <Setter Property="Data" Value="{StaticResource ReceiverIconGeometry}"/>
+                                <Setter Property="Stroke" Value="{DynamicResource AccentForegroundBrush}"/>
+                                <Setter Property="StrokeThickness" Value="1.6"/>
+                                <Style.Triggers>
+                                  <DataTrigger Binding="{Binding IsHomePod}" Value="True">
+                                    <Setter Property="Data" Value="{StaticResource HomePodIconGeometry}"/>
+                                    <Setter Property="Fill" Value="{DynamicResource AccentForegroundBrush}"/>
+                                    <Setter Property="StrokeThickness" Value="0"/>
+                                  </DataTrigger>
+                                </Style.Triggers>
+                              </Style>
+                            </Path.Style>
+                          </Path>
                         </Grid>
                       </Viewbox>
                     </Border>

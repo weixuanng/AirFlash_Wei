@@ -5,26 +5,35 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 namespace AirFlash.App.Ui;
 
-/// <summary>Critically shaped spring curve (damped second-order step response)
-/// normalised so it settles within the animation's duration. Damping 0.8
-/// matches the default SwiftUI spring: a fast start, ~1.5 % overshoot, soft landing.</summary>
+/// <summary>A spring described the way Apple describes one: a duration and a
+/// bounce (WWDC23 "Animate with springs"). Stiffness is (2π / duration)² and the
+/// damping ratio is 1 − bounce. The curve is solved exactly, so it is the same
+/// shape at 60, 120 or 144 frames a second. The animation that uses it must last
+/// <see cref="Settle"/>, the time the spring takes to come within 0.1 % of rest.</summary>
 public sealed class SpringEase : EasingFunctionBase
 {
-    private const double Damping = 0.8;
-    // Envelope e^(-ζωt) reaches 0.001 at t = 1, so the curve has settled.
-    private static readonly double Omega = Math.Log(1000) / Damping;
-    private static readonly double OmegaD = Omega * Math.Sqrt(1 - Damping * Damping);
-
-    public SpringEase() => EasingMode = EasingMode.EaseIn; // EaseInCore is already the final shape.
+    private readonly double _omega, _zeta, _settle;
+    public SpringEase() : this(0.5, 0.15) { }
+    public SpringEase(double duration, double bounce)
+    {
+        _omega = 2 * Math.PI / duration;
+        _zeta = Math.Clamp(1 - bounce, 0.05, 1);
+        // Under-damped: the envelope e^(-ζωt) reaches 0.001. Critically damped: (1 + ωt)e^(-ωt) does at ωt ≈ 9.23.
+        _settle = _zeta < 1 ? Math.Log(1000) / (_zeta * _omega) : 9.2334 / _omega;
+        EasingMode = EasingMode.EaseIn; // EaseInCore is already the final shape.
+    }
+    public TimeSpan Settle => TimeSpan.FromSeconds(_settle);
 
     protected override double EaseInCore(double t)
     {
         if (t <= 0) return 0;
         if (t >= 1) return 1;
-        var decay = Math.Exp(-Damping * Omega * t);
-        return 1 - decay * (Math.Cos(OmegaD * t) + Damping * Omega / OmegaD * Math.Sin(OmegaD * t));
+        var time = t * _settle;
+        if (_zeta >= 1) return 1 - Math.Exp(-_omega * time) * (1 + _omega * time);
+        var damped = _omega * Math.Sqrt(1 - _zeta * _zeta);
+        return 1 - Math.Exp(-_zeta * _omega * time) * (Math.Cos(damped * time) + _zeta * _omega / damped * Math.Sin(damped * time));
     }
-    protected override Freezable CreateInstanceCore() => new SpringEase();
+    protected override Freezable CreateInstanceCore() => new SpringEase(2 * Math.PI / _omega, 1 - _zeta);
 }
 
 /// <summary>Subtle motion shared by the panel. Everything here is render-only
@@ -36,17 +45,84 @@ public static class Motion
     /// positions, and whenever Windows turns client-area animations off.</summary>
     public static bool Enabled { get; set; } = true;
     internal static bool Active => Enabled && SystemParameters.ClientAreaAnimation;
-    internal static readonly TimeSpan Spring = TimeSpan.FromMilliseconds(520);
+    // SwiftUI's presets: snappy (0.5 s, bounce 0.15) moves things, bouncy (0.5 s, 0.3) answers a press.
+    private static readonly SpringEase Snappy = new(0.5, 0.15);
+    private static readonly SpringEase Bouncy = new(0.5, 0.3);
+    internal static readonly TimeSpan Spring = Snappy.Settle;
     private static readonly TimeSpan Fade = TimeSpan.FromMilliseconds(200);
     private static readonly TimeSpan StaggerBase = TimeSpan.FromMilliseconds(90);
     private static readonly TimeSpan StaggerStep = TimeSpan.FromMilliseconds(35);
     private const int StaggerCap = 8;
     private const double RiseDip = 8;
-    internal static readonly IEasingFunction SpringCurve = Frozen(new SpringEase());
+    internal static readonly IEasingFunction SpringCurve = Frozen(Snappy);
+    private static readonly IEasingFunction BouncyCurve = Frozen(Bouncy);
     internal static readonly IEasingFunction EaseOut = Frozen(new CubicEase { EasingMode = EasingMode.EaseOut });
     private static readonly IEasingFunction Sine = Frozen(new SineEase { EasingMode = EasingMode.EaseInOut });
 
     private static IEasingFunction Frozen(EasingFunctionBase ease) { ease.Freeze(); return ease; }
+
+    // ---- Frame rate. WPF steps its animations 60 times a second unless told
+    // otherwise, which shows as judder on a 120 Hz screen. Ask for the fastest
+    // attached display's rate instead. Must run before the first animation exists.
+    public static int FrameRate { get; private set; } = 60;
+    public static void MatchDisplayRefreshRate()
+    {
+        int rate;
+        try { rate = DisplayRate.Fastest(); } catch (Exception) { return; }
+        ApplyFrameRate(Math.Clamp(rate, 60, 240));
+    }
+    /// <summary>False when WPF refuses; animations then stay at 60, which is cosmetic.</summary>
+    internal static bool ApplyFrameRate(int rate)
+    {
+        if (rate <= 60 || FrameRate != 60) return FrameRate == rate;
+        try { Timeline.DesiredFrameRateProperty.OverrideMetadata(typeof(Timeline), new FrameworkPropertyMetadata(rate)); }
+        catch (Exception) { return false; }
+        FrameRate = rate;
+        return true;
+    }
+
+    // ---- Press: a row sinks to 97 % under the pointer and springs back on release.
+    public static readonly DependencyProperty PressProperty = DependencyProperty.RegisterAttached(
+        "Press", typeof(bool), typeof(Motion), new PropertyMetadata(false, OnPressChanged));
+    public static bool GetPress(DependencyObject element) => (bool)element.GetValue(PressProperty);
+    public static void SetPress(DependencyObject element, bool value) => element.SetValue(PressProperty, value);
+
+    private static void OnPressChanged(DependencyObject element, DependencyPropertyChangedEventArgs args)
+    {
+        if (element is not UIElement target) return;
+        target.PreviewMouseLeftButtonDown -= OnPressDown;
+        target.PreviewMouseLeftButtonUp -= OnPressUp;
+        target.MouseLeave -= OnPressUp;
+        if (args.NewValue is not true) return;
+        target.PreviewMouseLeftButtonDown += OnPressDown;
+        target.PreviewMouseLeftButtonUp += OnPressUp;
+        target.MouseLeave += OnPressUp;
+    }
+    private static ScaleTransform PressScale(UIElement target)
+    {
+        if (target.RenderTransform is ScaleTransform { IsFrozen: false } scale) return scale;
+        target.RenderTransformOrigin = new Point(0.5, 0.5);
+        target.RenderTransform = scale = new ScaleTransform();
+        return scale;
+    }
+    private static void OnPressDown(object sender, System.Windows.Input.MouseButtonEventArgs args)
+    {
+        if (sender is UIElement target && Active) Scale(PressScale(target), 0.97, TimeSpan.FromMilliseconds(120), EaseOut);
+    }
+    private static void OnPressUp(object sender, System.Windows.Input.MouseEventArgs args)
+    {
+        if (sender is not UIElement { RenderTransform: ScaleTransform { IsFrozen: false } scale }) return;
+        if (!Active) { scale.BeginAnimation(ScaleTransform.ScaleXProperty, null); scale.BeginAnimation(ScaleTransform.ScaleYProperty, null); return; }
+        if (scale.ScaleX < 1) Scale(scale, 1, Bouncy.Settle, BouncyCurve);
+    }
+    private static void Scale(ScaleTransform scale, double to, TimeSpan duration, IEasingFunction ease)
+    {
+        // No From: a release mid-press starts from wherever the row has got to.
+        var animation = new DoubleAnimation(to, duration) { EasingFunction = ease };
+        animation.Freeze();
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, animation);
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, animation);
+    }
 
     // ---- Panel entrance: rises 10 DIP from the taskbar, scales up from 96 % and fades in.
     public static void EnterPanel(UIElement panel)
@@ -190,4 +266,50 @@ public static class Motion
         if (sender is UIElement target && Active && target.IsVisible)
             target.BeginAnimation(UIElement.OpacityProperty, To(0.15, 1, Fade + Fade, EaseOut));
     }
+}
+
+/// <summary>Refresh rate of the fastest display attached to the desktop.</summary>
+internal static class DisplayRate
+{
+    public static int Fastest()
+    {
+        var best = 0;
+        var device = new DisplayDevice { Size = System.Runtime.InteropServices.Marshal.SizeOf<DisplayDevice>() };
+        for (uint i = 0; EnumDisplayDevicesW(null, i, ref device, 0); i++)
+        {
+            if ((device.StateFlags & 1) == 0) continue; // not part of the desktop
+            var mode = new DevMode { Size = (ushort)System.Runtime.InteropServices.Marshal.SizeOf<DevMode>() };
+            if (EnumDisplaySettingsW(device.Name, -1, ref mode)) best = Math.Max(best, (int)mode.DisplayFrequency);
+        }
+        return best;
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private struct DisplayDevice
+    {
+        public int Size;
+        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.ByValTStr, SizeConst = 32)] public string Name;
+        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.ByValTStr, SizeConst = 128)] public string Text;
+        public uint StateFlags;
+        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.ByValTStr, SizeConst = 128)] public string Id;
+        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.ByValTStr, SizeConst = 128)] public string Key;
+    }
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private struct DevMode
+    {
+        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.ByValTStr, SizeConst = 32)] public string DeviceName;
+        public ushort SpecVersion, DriverVersion, Size, DriverExtra;
+        public uint Fields;
+        public int PositionX, PositionY;
+        public uint Orientation, FixedOutput;
+        public short Color, Duplex, YResolution, TTOption, Collate;
+        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.ByValTStr, SizeConst = 32)] public string FormName;
+        public ushort LogPixels;
+        public uint BitsPerPel, PelsWidth, PelsHeight, DisplayFlags, DisplayFrequency;
+        public uint IcmMethod, IcmIntent, MediaType, DitherType, Reserved1, Reserved2, PanningWidth, PanningHeight;
+    }
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern bool EnumDisplayDevicesW(string? device, uint index, ref DisplayDevice info, uint flags);
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern bool EnumDisplaySettingsW(string? device, int mode, ref DevMode info);
 }

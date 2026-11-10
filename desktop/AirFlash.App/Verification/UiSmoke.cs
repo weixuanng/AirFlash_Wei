@@ -278,11 +278,15 @@ internal static class UiSmoke
         Check(icons.Count(p => p.Name == "ReceiverIcon") == app.Receivers.Count
             && icons.Count(p => p.Name == "PrimaryIcon") == 1,
             "each receiver displays its own speaker vector and the panel has one primary icon", checks);
+        Check(app.Receivers.Any(r => r.IsHomePod) && app.Receivers.Any(r => !r.IsHomePod),
+            "the sample speakers cover both the HomePod glyph and the generic one", checks);
+        Check(Motion.ApplyFrameRate(120) && System.Windows.Media.Animation.Timeline.GetDesiredFrameRate(new System.Windows.Media.Animation.DoubleAnimation()) == 120,
+            "animations step at the display's rate when it is above 60 Hz", checks);
         foreach (var icon in icons)
         {
             var key = icon.Name switch
             {
-                "ReceiverIcon" => "ReceiverIconGeometry",
+                "ReceiverIcon" => (icon.DataContext as AirFlash.App.ViewModels.ReceiverViewModel)?.IsHomePod == true ? "HomePodIconGeometry" : "ReceiverIconGeometry",
                 _ => app.PrimaryIsStop ? "StopIconGeometry" : "PlayIconGeometry"
             };
             Check(ReferenceEquals(icon.Data, panel.FindResource(key)) && !icon.Data.IsEmpty(),
