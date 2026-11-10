@@ -551,7 +551,7 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
             await connection.SendAsync(session, "set_now_playing", new
             {
                 title = now.Title, artist = now.Artist, album = now.Album, genre = now.Genre,
-                duration_ms = now.DurationMs, position_ms = now.PositionMs, playing = now.Playing
+                duration_ms = now.DurationMs, position_ms = now.PositionMs, playing = now.Playing, artwork_path = now.ArtworkPath
             }, cancellation).ConfigureAwait(false);
         }
         catch (Exception error) when (error is IOException or ObjectDisposedException or InvalidOperationException)
@@ -886,6 +886,15 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
                             var current = Snapshot;
                             var takeover = notice.Code == "preempted" && notice.Reason == "takeover";
                             Publish(epoch, current.State, takeover ? L.Get("Another device took over this AirPlay session. Airplay reclaimed it.") : current.Message);
+                        }
+                        else if (kind == "metadata_sent" && (item.Boolean("artwork_updated") == true || item.Text("message").Contains("artwork", StringComparison.Ordinal)))
+                        {
+                            // The speaker's answer to the artwork is the evidence for Sound Glow.
+                            log?.Invoke($"Now Playing artwork sent={item.Boolean("artwork_updated") == true}; bytes={item.Integer("artwork_bytes")}; message={item.Text("message")}");
+                        }
+                        else if (kind == "metadata_accepted" && item.Text("artwork_skipped") is { Length: > 0 } skipped)
+                        {
+                            log?.Invoke($"Now Playing artwork skipped: {skipped}");
                         }
                         else if (kind == "transport_metrics" && startedAt != 0)
                         {

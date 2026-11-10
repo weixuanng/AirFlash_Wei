@@ -38,6 +38,27 @@ public sealed class NowPlayingTests
     }
 
     [Fact]
+    public async Task Artwork_that_arrives_after_the_title_is_published_for_the_same_track()
+    {
+        var source = new Source();
+        long now = 0;
+        var pump = new NowPlayingPump(source, () => now) { Settle = TimeSpan.FromMilliseconds(300) };
+        source.Value = Track();
+        Assert.Null(await pump.PollAsync(CancellationToken.None));
+        now = 400;
+        Assert.Equal("", (await pump.PollAsync(CancellationToken.None))!.ArtworkPath);
+        // The player publishes the thumbnail a moment later: same track, same position.
+        source.Value = Track() with { ArtworkPath = "art.jpg" };
+        now = 2400;
+        Assert.Null(await pump.PollAsync(CancellationToken.None));
+        now = 2800;
+        Assert.Equal("art.jpg", (await pump.PollAsync(CancellationToken.None))!.ArtworkPath);
+        // Unchanged artwork is not sent again.
+        now = 3200;
+        Assert.Null(await pump.PollAsync(CancellationToken.None));
+    }
+
+    [Fact]
     public async Task A_new_track_is_published_only_after_the_settle_window()
     {
         var (source, pump, _) = Setup();

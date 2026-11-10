@@ -1,18 +1,13 @@
-# Airplay 0.2.9
+# Airplay 0.2.10
 
-Changes since Airplay 0.2.8.
+Changes since Airplay 0.2.9.
 
-## Volume
+## Sound Glow
 
-- **The panel has a volume slider for the HomePod.** It sets the speaker's own volume, the same level its touch surface changes. It appears while Airplay is streaming and the HomePod reports its volume.
+- **Airplay now sends the artwork of what is playing to the HomePod.** A HomePod takes its Sound Glow colours from the artwork of the current track. Airplay already sent the title and artist but no artwork, so the glow kept the colours of whatever played before. Airplay now takes the thumbnail Windows has for the playing media, shrinks it to at most 512 pixels, and sends it with each new track.
+- Colours can only follow media that gives Windows a thumbnail: Spotify, Apple Music, and video in Chrome or Edge usually do. Games and many other apps do not.
+- Whether the HomePod uses artwork from Airplay for Sound Glow has not been tested on a real HomePod. The log has a `Now Playing artwork` line for what was sent and how the HomePod answered.
 
-## Sharing the HomePod with an iPhone
-
-- **Airplay no longer takes the HomePod back from an iPhone.** When audio was moved from an iPhone to the HomePod, the HomePod ended Airplay's session and Airplay reconnected within seconds, cutting the iPhone off. The HomePod plays handed-over audio itself and does not report an AirPlay session for it, so Airplay judged it free. Airplay now also reads the HomePod's "playing" flag, waits while it is set, and resumes within about 30 seconds of the HomePod going idle. If it ever keeps waiting when the HomePod is free, press Reconnect to take it back.
-- After the HomePod ends a session, Airplay waits 4 seconds before checking whether it is free.
-
-Neither change has been tested against a real HomePod. The "playing" flag was identified from one HomePod mini 2 on software 27.2.
-
-Run **Airplay-0.2.9.msi** to install or upgrade. The portable **Airplay.exe** still works but does not get the firewall rule. Verify downloads with **SHA256SUMS.txt**. Binaries are unsigned, so Windows SmartScreen may ask you to confirm the first run.
+Run **Airplay-0.2.10.msi** to install or upgrade. The portable **Airplay.exe** still works but does not get the firewall rule. Verify downloads with **SHA256SUMS.txt**. Binaries are unsigned, so Windows SmartScreen may ask you to confirm the first run.
 
 Logs are in `%APPDATA%\Airplay\logs`.

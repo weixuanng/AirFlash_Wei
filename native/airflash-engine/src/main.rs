@@ -452,8 +452,14 @@ fn main() {
                             && !r.cancel.is_cancelled()),
                         "metadata session is no longer active"
                     );
-                    let now: airflash_engine::metadata::NowPlaying =
+                    let mut now: airflash_engine::metadata::NowPlaying =
                         serde_json::from_value(request.params)?;
+                    anyhow::ensure!(now.artwork_path.len() <= 1024, "artwork path is too long");
+                    // Unusable artwork never costs the title and the progress bar.
+                    let artwork = match now.load_artwork() {
+                        Ok(()) => String::new(),
+                        Err(error) => format!("{error:#}"),
+                    };
                     anyhow::ensure!(
                         [&now.title, &now.artist, &now.album, &now.genre]
                             .iter()
@@ -462,10 +468,10 @@ fn main() {
                     );
                     let sequence = NEXT_METADATA.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     airflash_engine::metadata::global().set(sequence, now);
-                    Ok(sequence)
+                    Ok((sequence, artwork))
                 })();
                 let event = match result {
-                    Ok(sequence) => json!({"event":"metadata_accepted","sequence":sequence}),
+                    Ok((sequence, artwork)) => json!({"event":"metadata_accepted","sequence":sequence,"artwork_skipped":artwork}),
                     Err(error) => json!({"event":"metadata_error","message":error.to_string()}),
                 };
                 send(&request.id, &request.session_id, event);
