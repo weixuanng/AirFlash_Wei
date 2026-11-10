@@ -49,7 +49,7 @@
 //! `ReceiverStatusFlags.ReceiverSessionActive = 131072 (0x20000, bit 17)`,
 //! `ReceiverStatusFlags.StereoPartnerUnreachable = 16384 (0x4000, bit 14)` and
 //! `ReceiverAccessPolicy.PasswordRequiredFlag = 128 (0x80, bit 7)`, all on a
-//! 64-bit (`ulong`) field. Only the session bit is a decision input, and it is
+//! 64-bit (`ulong`) field. The session bit and the playing bit (bit 20) are the decision inputs; the session bit is
 //! **not** an "another sender" bit: it is true for our own session too. The
 //! reference sender's "is playing another sender's session" line is context —
 //! it probes from a reclaim path that already lost the session — so [`classify`]
@@ -228,6 +228,15 @@ pub const TAKEOVER_WINDOW: Duration = Duration::from_secs(30);
 /// locally derived `we_hold_session` dimension. A real HomePod's value is still
 /// unverified, which is why the raw field is logged on every probe.
 pub const RECEIVER_SESSION_ACTIVE: u64 = 0x0002_0000;
+
+/// Bit 20. Not in the reference implementation's list. A HomePod mini 2 on
+/// software 27.2 sets it whenever it is playing: together with
+/// [`RECEIVER_SESSION_ACTIVE`] while this engine streams (`0x1a0404`), and alone
+/// once an iPhone has handed its audio over (`0x180404`); it is clear right
+/// after a session ends (`0x080404`). A handed-over stream plays from the
+/// HomePod itself, so the session bit stays clear and this bit is the only sign
+/// that the speaker is in use.
+pub const RECEIVER_PLAYING: u64 = 0x0010_0000;
 
 /// `ReceiverStatusFlags.StereoPartnerUnreachable`: `16384uL`, i.e. bit 14 (Q31).
 /// It says nothing about who owns the active session, so it must never influence
@@ -787,7 +796,7 @@ pub struct ProbeReport {
 /// three-way shape is Q31's prescription: the session bit alone cannot
 /// distinguish our own session from another sender's.
 pub fn classify(status_flags: u64, we_hold_session: bool) -> ProbeOutcome {
-    if status_flags & RECEIVER_SESSION_ACTIVE == 0 {
+    if status_flags & (RECEIVER_SESSION_ACTIVE | RECEIVER_PLAYING) == 0 {
         ProbeOutcome::Free
     } else if we_hold_session {
         ProbeOutcome::OursActive
@@ -1623,7 +1632,7 @@ mod tests {
             0x0000_0100,
             0x8000_0000,
             0x0000_1000_0000,
-            u64::from(u32::MAX) & !RECEIVER_SESSION_ACTIVE,
+            u64::from(u32::MAX) & !(RECEIVER_SESSION_ACTIVE | RECEIVER_PLAYING),
         ] {
             for we_hold_session in [false, true] {
                 assert_eq!(
@@ -1707,6 +1716,38 @@ mod tests {
     }
 
     #[test]
+    fn a_homepod_playing_a_handed_over_stream_is_busy_without_the_session_bit() {
+        // Captured from a HomePod mini 2 on software 27.2.
+        let idle = 0x0008_0404;
+        let iphone_handed_over = 0x0018_0404;
+        let streaming_from_this_engine = 0x001a_0404;
+        assert_eq!(classify(idle, false), ProbeOutcome::Free);
+        assert_eq!(
+            classify(iphone_handed_over, false),
+            ProbeOutcome::BusyElsewhere
+        );
+        assert_eq!(
+            classify(streaming_from_this_engine, true),
+            ProbeOutcome::OursActive
+        );
+        assert_eq!(classify(RECEIVER_PLAYING, true), ProbeOutcome::OursActive);
+        // An automatic start must wait for it, and a lost session must not reclaim it.
+        assert_eq!(
+            combine(
+                false,
+                ReceiverLiveness::Alive,
+                Some(iphone_handed_over),
+                false
+            ),
+            ProbeOutcome::BusyElsewhere
+        );
+        assert_eq!(
+            action_for(ProbeOutcome::BusyElsewhere),
+            ProbeAction::Requeue
+        );
+    }
+
+    #[test]
     fn status_flags_above_u32_max_are_classified_on_the_full_64_bits() {
         // The old mask was 32-bit; a value with a high bit plus bit 17 must
         // still be recognised as an active session.
@@ -1752,12 +1793,12 @@ mod tests {
     #[test]
     fn raw_status_flags_survive_parsing_for_the_device_mapping() {
         let mut info = plist::Dictionary::new();
-        info.insert("statusFlags".into(), Value::Integer(0x1234_5678.into()));
+        info.insert("statusFlags".into(), Value::Integer(0x1204_5678.into()));
         assert_eq!(
             report_from_info(&Value::Dictionary(info), false),
             ProbeReport {
                 outcome: ProbeOutcome::Free,
-                status_flags: Some(0x1234_5678)
+                status_flags: Some(0x1204_5678)
             }
         );
         // The field is a 64-bit `ulong`: a high bit is preserved in the log and

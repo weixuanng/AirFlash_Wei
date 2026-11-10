@@ -959,7 +959,7 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
                     var held = streamedAt == 0 ? TimeSpan.Zero : Stopwatch.GetElapsedTime(streamedAt);
                     // A refusal before any clock work (say, the receiver rejects the sender
                     // clock outright) also moves on, unless this arrangement is proven.
-                    if (streamedAt == 0 && (notice.Code == "clock_not_ready" || notice.Retryable == false && !_clockStrategies.IsProven(receiver.Id))
+                    if (streamedAt == 0 && (notice.Code == "clock_not_ready" || notice.Retryable == false && notice.Code is not ("preempted" or "ownership_unconfirmed" or "forced_latency_conflict") && !_clockStrategies.IsProven(receiver.Id))
                         || streamedAt != 0 && held < ClockProvenAfter && notice.Code is "clock_lost" or "timeline_expired")
                         log?.Invoke($"Clock strategy {clockStrategy} did not hold ({notice.Code}); next: {_clockStrategies.Failed(receiver.Id)}");
                     else if (held >= ClockProvenAfter) _clockStrategies.Worked(receiver.Id);
@@ -1008,6 +1008,10 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
                 transportFaults.Add(notice.Code);
             }
             var delay = TimeSpan.FromMilliseconds(Math.Min(_timing.Retry.TotalMilliseconds * Math.Pow(2, attempts - 1), 8000));
+            // A speaker that ended the session itself has usually been given other audio
+            // (an iPhone handing over). It reports that a moment later, so give it time
+            // before the automatic start asks whether it is free.
+            if (_diagnostics.LastFault?.Code == "peer_closed" && delay < _timing.Retry * 4) delay = _timing.Retry * 4;
             log?.Invoke($"Session reconnect reason=transport_fault; code={_diagnostics.LastFault?.Code}; attempt={attempts}; delay_ms={delay.TotalMilliseconds}");
             Publish(epoch, PlaybackState.Connecting, L.Format("Disconnected; reconnecting ({0}/{1})", attempts, _settings.MaxReconnectAttempts));
             await Task.Delay(delay, cancellation).ConfigureAwait(false);
