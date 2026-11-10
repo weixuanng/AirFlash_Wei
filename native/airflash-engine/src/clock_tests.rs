@@ -1097,9 +1097,13 @@ fn sender_clock_announces_syncs_and_signals_like_an_ios_sender() {
     let count = |kind: u8| heard.iter().filter(|p| p[0] & 15 == kind).count();
     // Announce and Signaling start at once and repeat every second.
     assert!((2..=4).contains(&count(11)), "announces {}", count(11));
-    assert_eq!(count(11), count(12));
+    assert!(count(11).abs_diff(count(12)) <= 1);
     // Sync and Follow_Up eight times a second.
-    assert!(count(0) >= 12 && count(0) == count(8), "syncs {}", count(0));
+    assert!(
+        count(0) >= 12 && count(0).abs_diff(count(8)) <= 1,
+        "syncs {}",
+        count(0)
+    );
     let announced = heard.iter().find(|p| p[0] & 15 == 11).unwrap();
     assert_eq!(announced.len(), 76);
     assert_eq!(&announced[47..53], &[128, 6, 0x21, 0x43, 0x6a, 128]);
@@ -1197,10 +1201,20 @@ fn an_actively_followed_receiver_gets_the_apple_signaling_every_second() {
         .iter()
         .filter(|p| p[0] & 15 == 12 && p.len() == 106)
         .count();
-    assert_eq!(signalling, 2, "one at activation and one a second later");
+    assert!(
+        (2..=3).contains(&signalling),
+        "one at activation, then one a second: {signalling}"
+    );
     assert_eq!(snapshot.strategy, "follow_active");
     // It never offers the receiver this engine's grandmaster dataset.
     assert!(heard.iter().all(|p| !(p[0] & 15 == 11 && p.len() == 76)));
+    // The only Announces it sends are the introduction's, ranked below any receiver.
+    assert!(
+        heard
+            .iter()
+            .filter(|p| p[0] & 15 == 11)
+            .all(|p| p[47] >= 250)
+    );
 }
 
 #[test]

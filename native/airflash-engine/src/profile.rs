@@ -38,6 +38,9 @@ pub enum ClockStrategy {
     /// Follow the receiver the way a Mac does: describe this sender as a timing
     /// peer without a clock of its own, introduce it, and send no SETPEERS.
     FollowActive,
+    /// Follow the receiver as releases up to 0.2.7 did (own ClockID, SETPEERS,
+    /// requests and introduction), now with the Apple Signaling as well.
+    FollowPeers,
 }
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -703,6 +706,7 @@ mod tests {
             ("sender", ClockStrategy::Sender),
             ("follow_quiet", ClockStrategy::FollowQuiet),
             ("follow_active", ClockStrategy::FollowActive),
+            ("follow_peers", ClockStrategy::FollowPeers),
         ] {
             let profile: Profile = serde_json::from_value(serde_json::json!({
                 "timing": "auto", "follow_receiver_clock": true, "clock_strategy": text

@@ -95,7 +95,8 @@ pub const OUR_PRIORITY1: u8 = 128;
 const OUR_QUALITY: [u8; 4] = [6, 0x21, 0x43, 0x6a];
 /// timeSource GPS, again as iOS announces it.
 const OUR_TIME_SOURCE: u8 = 0x20;
-/// How far a delay-derived offset may sit from the Sync-derived one.
+/// How far a delay-derived offset may sit above the Sync-derived one: half the
+/// largest round trip accepted from a followed receiver.
 const DELAY_AGREEMENT_NS: f64 = 10_000_000.0;
 /// The sender's Announce and its companion Signaling go out once a second.
 const ANNOUNCE_INTERVAL: Duration = Duration::from_secs(1);
@@ -275,6 +276,8 @@ struct PeerState {
     active: bool,
     /// When the once-a-second messages for this peer are next due.
     next_second: Option<Instant>,
+    /// Sequence of the once-a-second Announce and Signaling this peer is sent.
+    second_seq: u16,
     /// The peer addressed a Signaling to this clock's port identity, so it has
     /// registered this engine as a timing peer.
     named_by_peer: bool,
@@ -969,6 +972,7 @@ fn followed_packet(s: &mut PeerState, data: &[u8], local_ns: u64, now: Instant, 
                 follow: true,
                 quiet: s.quiet,
                 next_second: s.next_second,
+                second_seq: s.second_seq,
                 named_by_peer: s.named_by_peer,
                 active: s.active,
                 local_address: s.local_address,
@@ -1035,12 +1039,13 @@ fn followed_packet(s: &mut PeerState, data: &[u8], local_ns: u64, now: Instant, 
                     return;
                 }
                 let offset = (outward + inward) / 2.0;
-                // The two estimates differ by half the path asymmetry, a few
-                // milliseconds at most on a local network. A HomePod's delay
-                // timestamps can be a tenth of a second away from its own Sync
-                // timestamps and still pass the round-trip gate; such a sample
-                // would move the audio anchor by that much, so it is refused and
-                // the Sync/Follow_Up estimate keeps carrying the timeline.
+                // The delay estimate sits half the apparent round trip above the
+                // Sync estimate, so this refuses an apparent round trip of more
+                // than about 20 ms. A HomePod's delay timestamps can be a tenth
+                // of a second away from its own Sync timestamps and still pass
+                // the 250 ms gate above; such a sample would move the audio
+                // anchor by half that error, so it is refused and the
+                // Sync/Follow_Up estimate keeps carrying the timeline.
                 if s.sync_offset
                     .is_some_and(|sync| (offset - sync).abs() > DELAY_AGREEMENT_NS)
                 {
@@ -1520,8 +1525,6 @@ fn ptp_loop(
     network: &Mutex<NetworkSnapshot>,
 ) {
     let mut seq = 0u16;
-    let mut announce_seq = 0u16;
-    let mut signaling_seq = 0u16;
     let mut next_sync = Instant::now();
     let mut buf = [0u8; 2048];
     let mut nudge_seq = 0u16;
@@ -1565,7 +1568,6 @@ fn ptp_loop(
             nudge_seq = nudge_seq.wrapping_add(1);
         }
         if now >= next_sync {
-            let mut announced = false;
             for peer in peers {
                 let mut states = state.lock().unwrap();
                 let s = states.get_mut(peer).unwrap();
@@ -1575,9 +1577,10 @@ fn ptp_loop(
                 }
                 // Once a second, starting the moment the peer is activated.
                 let second = s.next_second.is_none_or(|at| now >= at);
+                let second_seq = s.second_seq;
                 if second {
                     s.next_second = Some(now + ANNOUNCE_INTERVAL);
-                    announced = true;
+                    s.second_seq = second_seq.wrapping_add(1);
                 }
                 if s.follow {
                     if s.subscription_due(now) {
@@ -1605,7 +1608,7 @@ fn ptp_loop(
                     if second {
                         // The receiver sends this Signaling to its timing peers
                         // and expects the same from each of them.
-                        let packet = apple_signaling(clock_id, signaling_seq);
+                        let packet = apple_signaling(clock_id, second_seq);
                         send_ptp(general, &packet, (*peer, 320).into(), s, "signaling");
                         let mut req = header(1, 44, clock_id, seq, 0x0408, 0);
                         let sent = clock.now_ns();
@@ -1619,18 +1622,14 @@ fn ptp_loop(
                 }
                 // Sender clock: what an iOS grandmaster sends its timing peers.
                 if second {
-                    let packet = announce(clock_id, announce_seq);
+                    let packet = announce(clock_id, second_seq);
                     send_ptp(general, &packet, (*peer, 320).into(), s, "announce");
-                    let packet = apple_signaling(clock_id, signaling_seq);
+                    let packet = apple_signaling(clock_id, second_seq);
                     send_ptp(general, &packet, (*peer, 320).into(), s, "signaling");
                 }
                 let (sync, follow) = sync_pair(clock_id, seq, clock.now_ns());
                 send_ptp(event, &sync, (*peer, 319).into(), s, "sync");
                 send_ptp(general, &follow, (*peer, 320).into(), s, "follow_up");
-            }
-            if announced {
-                announce_seq = announce_seq.wrapping_add(1);
-                signaling_seq = signaling_seq.wrapping_add(1);
             }
             seq = seq.wrapping_add(1);
             next_sync = now + Duration::from_millis(125);
@@ -1716,6 +1715,10 @@ fn ptp_loop(
                 }
                 if s.follow && [0, 8, 9, 11, 12].contains(&kind) {
                     followed_packet(s, &buf[..n], local_received, received_at, clock_id);
+                }
+                // A quietly followed peer is answered with nothing at all.
+                if s.quiet {
+                    continue;
                 }
                 if kind == 12 {
                     for grant in unicast_grants(&buf[..n], clock_id, request_seq) {

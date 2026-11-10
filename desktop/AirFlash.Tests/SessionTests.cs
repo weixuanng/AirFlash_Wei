@@ -432,8 +432,29 @@ public sealed class SessionTests
         Assert.Equal(("auto", true, "follow_quiet"), ClockProfile(second));
         Assert.Equal(("auto", true, "follow_active"), ClockProfile(third));
         Assert.Equal(ClockStrategyPlan.FollowActive, plan.Current("a"));
+        // Streaming alone is not proof: the arrangement is kept once the clock has held.
+        Assert.False(plan.IsProven("a"));
         Assert.Contains(logs, line => line.Contains("Clock strategy: sender", StringComparison.Ordinal));
-        Assert.Contains(logs, line => line.Contains("Clock strategy follow_quiet did not start (clock_not_ready); next: follow_active", StringComparison.Ordinal));
+        Assert.Contains(logs, line => line.Contains("Clock strategy follow_quiet did not hold (clock_not_ready); next: follow_active", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task OnlyClockFailuresMoveToTheNextClockArrangement()
+    {
+        var first = new FakeConnection(autoReady: false); var second = new FakeConnection(autoReady: false); var third = new FakeConnection();
+        var plan = new ClockStrategyPlan();
+        await using var controller = new SessionController(new FakeFactory(first, second, third), new FakeAudio(),
+            timing: Fast with { Connect = TimeSpan.FromSeconds(10) }, clockStrategies: plan);
+        var settings = Settings(); settings.ForceReconnect = true;
+        await controller.StartAsync(new Receiver("a", "a", "127.0.0.1") { FollowReceiverClock = true }, settings);
+        // A network failure says nothing about the clock: the same arrangement is tried again.
+        await first.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        first.EmitData(new { @event = "error", code = "connection_lost", channel = "rtsp", host = "127.0.0.1", retryable = true, message = "Connection lost." });
+        await second.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(("ptp", false, "sender"), ClockProfile(second));
+        second.EmitData(new { @event = "error", code = "clock_not_ready", channel = "clock", host = "127.0.0.1", retryable = true, message = "PTP exchange did not become ready." });
+        await Until(() => controller.Snapshot.State == PlaybackState.Streaming);
+        Assert.Equal(("auto", true, "follow_quiet"), ClockProfile(third));
     }
 
     [Fact]

@@ -25,6 +25,8 @@ public sealed record SessionTiming(TimeSpan Connect, TimeSpan Read, TimeSpan Pin
 public sealed class SessionController(IEngineFactory factory, IAudioService audio, Action<string>? log = null, SessionTiming? timing = null, Action<DesktopSessionRecord>? sessionRecords = null, TimeProvider? clock = null, ClockStrategyPlan? clockStrategies = null) : IAsyncDisposable
 {
     private readonly ClockStrategyPlan _clockStrategies = clockStrategies ?? new();
+    /// <summary>How long a session must hold its clock before its arrangement is kept.</summary>
+    internal static readonly TimeSpan ClockProvenAfter = TimeSpan.FromSeconds(30);
     private readonly SemaphoreSlim _serial = new(1, 1);
     private readonly SemaphoreSlim _audioWriter = new(1, 1);
     private readonly SemaphoreSlim _diagnosticWriter = new(1, 1);
@@ -659,6 +661,8 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
                 receiver = _receiver;
             }
             var startedAt = 0L;
+            // Unlike startedAt, never cleared: a standby resume is not a first start.
+            var streamedAt = 0L;
             string? clockStrategy = null;
             try
             {
@@ -814,7 +818,7 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
                             yieldWaits = 0;
                             await ApplyLocalMuteAsync().ConfigureAwait(false);
                             log?.Invoke($"Streaming started: {receiver.Id}; target latency {_adaptiveBase} ms; reconnect attempts {attempts}");
-                            if (clockStrategy is not null) _clockStrategies.Worked(receiver.Id);
+                            if (streamedAt == 0) streamedAt = Stopwatch.GetTimestamp();
                             Publish(epoch, PlaybackState.Streaming);
                             await PublishNowPlayingAsync(_nowPlaying, cancellation).ConfigureAwait(false);
                         }
@@ -885,6 +889,8 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
                         }
                         else if (kind == "transport_metrics" && startedAt != 0)
                         {
+                            if (clockStrategy is not null && streamedAt != 0 && Stopwatch.GetElapsedTime(streamedAt) >= ClockProvenAfter)
+                                _clockStrategies.Worked(receiver.Id);
                             var metrics = TransportMetrics.Parse(item);
                             if (recoveryHealth.Observe(metrics))
                             {
@@ -944,10 +950,20 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
                 }
                 ++attempts;
                 if (RecordFailure(epoch, error) is not { } notice) return;
-                // This arrangement never reached streaming: offer the next one on the
-                // following attempt. A session that streamed keeps its arrangement.
-                if (clockStrategy is not null && startedAt == 0 && notice.Code is not ("preempted" or "ownership_unconfirmed"))
-                    log?.Invoke($"Clock strategy {clockStrategy} did not start ({notice.Code}); next: {_clockStrategies.Failed(receiver.Id)}");
+                // Only the clock decides whether an arrangement suits the receiver: it
+                // never became ready, or it was lost within moments of streaming. A
+                // session that held its clock keeps the arrangement and has it saved;
+                // any other failure (network, sign-in, another sender) changes nothing.
+                if (clockStrategy is not null)
+                {
+                    var held = streamedAt == 0 ? TimeSpan.Zero : Stopwatch.GetElapsedTime(streamedAt);
+                    // A refusal before any clock work (say, the receiver rejects the sender
+                    // clock outright) also moves on, unless this arrangement is proven.
+                    if (streamedAt == 0 && (notice.Code == "clock_not_ready" || notice.Retryable == false && !_clockStrategies.IsProven(receiver.Id))
+                        || streamedAt != 0 && held < ClockProvenAfter && notice.Code is "clock_lost" or "timeline_expired")
+                        log?.Invoke($"Clock strategy {clockStrategy} did not hold ({notice.Code}); next: {_clockStrategies.Failed(receiver.Id)}");
+                    else if (held >= ClockProvenAfter) _clockStrategies.Worked(receiver.Id);
+                }
                 if (notice.Code is "preempted" or "ownership_unconfirmed" && _settings.ResumeAfterTakeover)
                 {
                     // Yield instead of fighting: wait one backoff step, then retry.

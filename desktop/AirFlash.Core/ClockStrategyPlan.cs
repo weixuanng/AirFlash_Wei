@@ -17,12 +17,16 @@ public sealed class ClockStrategyPlan(string? path = null)
     public const string Sender = "sender";
     /// <summary>Follow the receiver's clock and send it no timing traffic at all.</summary>
     public const string FollowQuiet = "follow_quiet";
-    /// <summary>Follow the receiver's clock and take part as an Apple timing peer.</summary>
+    /// <summary>Follow the receiver's clock the way a Mac does, without SETPEERS.</summary>
     public const string FollowActive = "follow_active";
-    public static readonly IReadOnlyList<string> Order = [Sender, FollowQuiet, FollowActive];
+    /// <summary>Follow the receiver's clock as releases up to 0.2.7 did, with SETPEERS.</summary>
+    public const string FollowPeers = "follow_peers";
+    public static readonly IReadOnlyList<string> Order = [Sender, FollowQuiet, FollowActive, FollowPeers];
 
     private readonly object _sync = new();
     private Dictionary<string, int>? _turns;
+    /// <summary>Only arrangements that streamed are written to disk.</summary>
+    private readonly Dictionary<string, int> _proven = new(StringComparer.Ordinal);
 
     /// <summary>The arrangement to use for this receiver's next attempt.</summary>
     public string Current(string receiverId)
@@ -30,7 +34,17 @@ public sealed class ClockStrategyPlan(string? path = null)
         lock (_sync) return Order[Load().GetValueOrDefault(receiverId) % Order.Count];
     }
 
-    /// <summary>The attempt never started streaming: move on to the next arrangement.</summary>
+    /// <summary>True when the receiver's current arrangement is one that has streamed.</summary>
+    public bool IsProven(string receiverId)
+    {
+        lock (_sync)
+        {
+            var turn = Load().GetValueOrDefault(receiverId);
+            return _proven.TryGetValue(receiverId, out var known) && known == turn;
+        }
+    }
+
+    /// <summary>The attempt never got a clock, or lost it at once: move on to the next arrangement.</summary>
     public string Failed(string receiverId)
     {
         lock (_sync)
@@ -47,11 +61,14 @@ public sealed class ClockStrategyPlan(string? path = null)
     {
         lock (_sync)
         {
-            if (path is null) return;
             var turns = Load();
+            var turn = turns.GetValueOrDefault(receiverId);
+            if (_proven.TryGetValue(receiverId, out var known) && known == turn) return;
+            _proven[receiverId] = turn;
+            if (path is null) return;
             try
             {
-                var saved = turns.ToDictionary(turn => turn.Key, turn => Order[turn.Value % Order.Count]);
+                var saved = _proven.ToDictionary(proven => proven.Key, proven => Order[proven.Value % Order.Count]);
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);
                 File.WriteAllText(path, JsonSerializer.Serialize(saved));
             }
@@ -70,7 +87,7 @@ public sealed class ClockStrategyPlan(string? path = null)
             foreach (var (receiver, strategy) in saved)
             {
                 var index = Order.ToList().IndexOf(strategy);
-                if (index >= 0) _turns[receiver] = index;
+                if (index >= 0) _turns[receiver] = _proven[receiver] = index;
             }
         }
         // A damaged or unreadable file only costs the remembered choice.
