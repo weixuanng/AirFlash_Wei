@@ -144,7 +144,7 @@
                       <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
                       <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
                         <!-- The one sign of a live connection: a green dot on the speaker in use. -->
-                        <Ellipse x:Name="ConnectedDot" Width="7" Height="7" Margin="0,1,6,0" VerticalAlignment="Center" Fill="{DynamicResource SuccessBrush}" Visibility="{Binding IsStreaming, Converter={StaticResource BoolVisibility}}"/>
+                        <Ellipse x:Name="ConnectedDot" Width="7" Height="7" Margin="0,0,6,4" VerticalAlignment="Center" Fill="{DynamicResource SuccessBrush}" Visibility="{Binding IsStreaming, Converter={StaticResource BoolVisibility}}"/>
                         <TextBlock Text="{Binding StateText, NotifyOnTargetUpdated=True}" Style="{StaticResource Hint}" loc:Motion.FadeOnUpdate="True"/>
                       </StackPanel>
                     </StackPanel>
