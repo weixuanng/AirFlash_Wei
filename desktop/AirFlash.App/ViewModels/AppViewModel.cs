@@ -559,7 +559,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
     // ---- Sleep. The speaker is let go before the PC sleeps and taken back on wake,
     // so nothing else in the house finds it held by a sleeping laptop.
     private string? _wakeTarget;
-    private bool _asleep;
+    private bool _asleep, _wakeBusy;
     private int _wakeTries;
     private DispatcherTimer? _wakeTimer;
     private const int WakeTries = 30;
@@ -568,11 +568,14 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
     {
         if (_closing) return Task.CompletedTask;
         _wakeTimer?.Stop();
-        // A second notice for the same sleep must not forget what was playing.
-        if (!_asleep) _wakeTarget = SessionHeld ? _snapshot.Receiver?.Id : null;
+        // Remember the speaker only when one is really in use: not while a stop the
+        // user asked for is still finishing. A speaker still waiting to be taken
+        // back from an earlier sleep stays remembered.
+        var held = SessionHeld && !IsStopping;
+        if (!_asleep && held && _snapshot.Receiver?.Id is { } id) _wakeTarget = id;
         _asleep = true;
-        AppPaths.Log($"Sleep: releasing speaker={_wakeTarget is not null}");
-        return _wakeTarget is null ? Task.CompletedTask : StopAsync(userInitiated: false);
+        AppPaths.Log($"Sleep: releasing speaker={held}; reconnect on wake={_wakeTarget is not null}");
+        return held ? StopAsync(userInitiated: false) : Task.CompletedTask;
     }
     /// <summary>Called on the UI thread once the PC is awake again.</summary>
     public void Resume()
@@ -589,11 +592,25 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
     }
     private async Task WakeTickAsync()
     {
-        if (_closing || _asleep || _wakeTarget is not { } target || SessionHeld || ++_wakeTries > WakeTries) { _wakeTimer?.Stop(); if (!_asleep) _wakeTarget = null; return; }
+        if (_closing || _asleep || _wakeTarget is not { } target) { _wakeTimer?.Stop(); return; }
+        // Done once the speaker is held again (by this retry or by the user), or
+        // when the tries run out; ordinary auto-connect takes over from there.
+        if (SessionHeld || ++_wakeTries > WakeTries)
+        {
+            AppPaths.Log($"Wake: reconnect finished held={SessionHeld}; tries={_wakeTries}");
+            _wakeTimer?.Stop(); _wakeTarget = null;
+            if (!SessionHeld) ScheduleAutoConnect();
+            return;
+        }
         if (IsStopping || Session.NeedsCleanup || !EngineReady) return;
         if (Receivers.FirstOrDefault(r => r.Receiver.Id == target && r.CanPlay) is not { } row) return;
-        _wakeTimer?.Stop(); _wakeTarget = null;
-        await ToggleAsync(row.Receiver, SessionStartIntent.Automatic);
+        // The first tries can fail while Wi-Fi is still coming back; the target is
+        // kept so the next tick tries again.
+        if (_wakeBusy) return; // a slow start must not be restarted by the next tick
+        _wakeBusy = true;
+        try { await ToggleAsync(row.Receiver, SessionStartIntent.Automatic); }
+        catch (Exception error) { AppPaths.Log($"Wake: reconnect try {_wakeTries} failed: {error.Message}"); }
+        finally { _wakeBusy = false; }
     }
     public Task StopAsync(bool userInitiated = true)
     {

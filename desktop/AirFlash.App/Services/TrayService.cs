@@ -47,7 +47,7 @@ public sealed class TrayService : IDisposable
         var dispatcher = panel.Dispatcher;
         // Windows holds sleep back until the first callback returns, so it waits (briefly) for the stop.
         _power = new(
-            () => { try { dispatcher.InvokeAsync(viewModel.SuspendAsync).Task.Unwrap().Wait(TimeSpan.FromSeconds(2)); } catch (Exception error) { AppPaths.Log($"Sleep: stop did not finish: {error.GetBaseException().Message}"); } },
+            () => { try { if (!dispatcher.InvokeAsync(viewModel.SuspendAsync).Task.Unwrap().Wait(TimeSpan.FromSeconds(2))) AppPaths.Log("Sleep: stop still running after 2 s"); } catch (Exception error) { AppPaths.Log($"Sleep: stop did not finish: {error.GetBaseException().Message}"); } },
             () => dispatcher.BeginInvoke(viewModel.Resume));
     }
     private static void Log(string message) => AppPaths.Log($"Tray path=\"{Environment.ProcessPath}\" {message}");

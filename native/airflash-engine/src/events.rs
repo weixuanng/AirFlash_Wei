@@ -129,7 +129,7 @@ fn parse_value(value: &Value) -> ParsedEvent {
     if let Some(volume) = dict.get("volume").and_then(normalised_volume) {
         parsed.volume = Some(volume);
     }
-    if parsed.commands.is_empty() && parsed.volume.is_none() {
+    if parsed.commands.is_empty() && parsed.volume.is_none() && !dict.is_empty() {
         parsed.unknown = Some(describe(dict));
     }
     parsed

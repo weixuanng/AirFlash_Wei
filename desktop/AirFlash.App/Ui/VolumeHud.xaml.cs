@@ -34,10 +34,11 @@ public partial class VolumeHud : Window
     {
         var level = Math.Clamp(volume, 0, 100);
         Level.Text = Math.Round(level).ToString(System.Globalization.CultureInfo.CurrentCulture);
-        if (!IsVisible) { Show(); UpdateLayout(); }
+        // A key pressed during the fade-out is not a new entrance: the window is still up.
+        var entering = !IsVisible;
+        if (entering) { Show(); UpdateLayout(); }
         Place();
         FillTarget = Math.Max(0, Track.ActualWidth) * level / 100;
-        var entering = !_shown;
         _shown = true;
         _hide.Stop(); _hide.Start();
         if (!Motion.Active)
@@ -50,7 +51,13 @@ public partial class VolumeHud : Window
         Run(Fill, WidthProperty, FillTarget, Motion.SmoothTime, Motion.SmoothCurve, entering ? 0 : null);
         // Coming back while fading out, the capsule returns from wherever it is.
         Run(Capsule, OpacityProperty, 1, TimeSpan.FromMilliseconds(160), Motion.EaseOut);
-        if (!entering) return;
+        if (!entering)
+        {
+            // Undo the shrink a fade-out had started.
+            Run(CapsuleScale, ScaleTransform.ScaleXProperty, 1, Motion.SmoothTime, Motion.SmoothCurve);
+            Run(CapsuleScale, ScaleTransform.ScaleYProperty, 1, Motion.SmoothTime, Motion.SmoothCurve);
+            return;
+        }
         Run(CapsuleScale, ScaleTransform.ScaleXProperty, 1, Motion.Spring, Motion.SpringCurve, 0.86);
         Run(CapsuleScale, ScaleTransform.ScaleYProperty, 1, Motion.Spring, Motion.SpringCurve, 0.86);
         Run(CapsuleOffset, TranslateTransform.YProperty, 0, Motion.Spring, Motion.SpringCurve, 10);
