@@ -6,7 +6,7 @@ fn follower(now: Instant) -> PeerState {
         active: true,
         ..Default::default()
     };
-    followed_packet(&mut state, &announce(8, 0, 0), 0, now, 7);
+    followed_packet(&mut state, &peer_announce(8, 0), 0, now, 7);
     state
 }
 #[test]
@@ -34,7 +34,7 @@ fn a_sync_only_mapping_freezes_expires_and_never_survives_an_identity_change() {
     );
     followed_packet(
         &mut state,
-        &announce(9, 1, 0),
+        &peer_announce(9, 1),
         0,
         last + Duration::from_secs(4),
         7,
@@ -104,7 +104,7 @@ fn cache_handles_backlog_wrap_duplicates_expiry_and_identity_changes() {
     assert_eq!(state.pending_syncs.len(), MAX_PENDING_SYNCS);
     followed_packet(
         &mut state,
-        &announce(9, 0, 0),
+        &peer_announce(9, 0),
         0,
         start + SAMPLE_LIFETIME,
         7,
@@ -123,12 +123,12 @@ fn a_changed_announce_identity_is_timestamped_once_per_restart() {
     assert_eq!(state.identity_change_at(), None);
     note_announce_identity(
         &mut state,
-        &announce(9, 0, 0),
+        &peer_announce(9, 0),
         start + Duration::from_secs(1),
     );
     followed_packet(
         &mut state,
-        &announce(9, 0, 0),
+        &peer_announce(9, 0),
         0,
         start + Duration::from_secs(1),
         7,
@@ -141,12 +141,12 @@ fn a_changed_announce_identity_is_timestamped_once_per_restart() {
     // Repeating the same identity must not count again.
     note_announce_identity(
         &mut state,
-        &announce(9, 1, 0),
+        &peer_announce(9, 1),
         start + Duration::from_secs(2),
     );
     followed_packet(
         &mut state,
-        &announce(9, 1, 0),
+        &peer_announce(9, 1),
         0,
         start + Duration::from_secs(2),
         7,
@@ -159,7 +159,7 @@ fn a_changed_announce_identity_is_timestamped_once_per_restart() {
     // A second restart moves the timestamp.
     note_announce_identity(
         &mut state,
-        &announce(10, 0, 0),
+        &peer_announce(10, 0),
         start + Duration::from_secs(3),
     );
     assert_eq!(
@@ -370,7 +370,7 @@ fn localhost_follower_locks_after_receiver_drops_the_first_subscription() {
         let now = Instant::now();
         if subscriptions >= 2 && now >= next_sync {
             remote_general
-                .send_to(&announce(8, sync_sequence, 0), local_general)
+                .send_to(&peer_announce(8, sync_sequence), local_general)
                 .unwrap();
             let (sync, follow) = sync_pair(8, sync_sequence, clock.now_ns() + 1_000_000);
             remote_event.send_to(&sync, local_event).unwrap();
@@ -607,12 +607,12 @@ fn introduced(now: Instant) -> PeerState {
         ..Default::default()
     };
     state.begin_session("127.0.0.1".parse().unwrap(), now);
-    followed_packet(&mut state, &announce(8, 0, 0), 0, now, 7);
+    followed_packet(&mut state, &peer_announce(8, 0), 0, now, 7);
     state
 }
 fn announces(state: &mut PeerState, count: u16, now: Instant) {
     for seq in 0..count {
-        followed_packet(state, &announce(8, 100 + seq, 0), 0, now, 7);
+        followed_packet(state, &peer_announce(8, 100 + seq), 0, now, 7);
     }
 }
 /// Step through the four introduction datagram groups starting at `from`.
@@ -814,7 +814,7 @@ fn an_announce_naming_this_engine_is_not_adopted_as_the_followed_clock() {
     let mut state = introduced(start);
     let theirs = state.bmca;
     // The receiver briefly names clock 7 (this engine) as its grandmaster.
-    let mut echo = announce(8, 5, 0);
+    let mut echo = peer_announce(8, 5);
     echo[53..61].copy_from_slice(&7u64.to_be_bytes());
     echo[47] = 95;
     followed_packet(&mut state, &echo, 0, start, 7);
@@ -834,7 +834,7 @@ fn wake_state_survives_a_receiver_restart_and_a_started_wake_survives_reactivati
     announces(&mut state, 3, at);
     assert_eq!(nudges(&mut state, at), [Nudge::Announce(95, 128)]);
     // The receiver restarts its PTP port under a new clock identity.
-    followed_packet(&mut state, &announce(9, 0, 0), 0, at, 7);
+    followed_packet(&mut state, &peer_announce(9, 0), 0, at, 7);
     assert_eq!(state.clock_id, Some(9));
     assert_eq!((state.wake.wakes, state.wake.attempts), (1, 1));
     assert!(state.wake.closing.is_some());
@@ -855,7 +855,7 @@ fn a_slowly_syncing_receiver_is_not_woken_before_it_settles() {
     for tick in 0..120u16 {
         let at = start + Duration::from_millis(u64::from(tick) * 25);
         if tick % 10 == 0 {
-            followed_packet(&mut state, &announce(8, 200 + tick, 0), 0, at, 7);
+            followed_packet(&mut state, &peer_announce(8, 200 + tick), 0, at, 7);
         }
         if tick % 40 == 8 {
             let local = 1_000_000_000 + u64::from(tick) * 25_000_000;
@@ -883,7 +883,7 @@ fn a_receiver_announcing_once_a_second_gets_every_remedy_before_the_deadline() {
     for tick in 0..320u64 {
         let at = start + Duration::from_millis(tick * 25);
         if tick % 40 == 20 {
-            followed_packet(&mut state, &announce(8, 300 + tick as u16, 0), 0, at, 7);
+            followed_packet(&mut state, &peer_announce(8, 300 + tick as u16), 0, at, 7);
         }
         for nudge in nudges(&mut state, at) {
             match nudge {
@@ -935,7 +935,7 @@ fn run_silent_receiver(woken: impl Fn(&[Vec<u8>]) -> bool) -> (PeerSnapshot, Vec
             was_syncing = syncing;
             next_packet = Instant::now() + Duration::from_millis(250);
             remote_general
-                .send_to(&announce(8, seq, 0), local_general)
+                .send_to(&peer_announce(8, seq), local_general)
                 .unwrap();
             if syncing {
                 let (sync, follow) = sync_pair(8, seq, clock.now_ns() + 5_000_000_000);
@@ -996,4 +996,261 @@ fn loop_wakes_a_receiver_that_ignores_the_introduction() {
     assert_eq!((snapshot.wake_attempts, snapshot.introductions), (1, 1));
     assert_eq!(snapshot.first_pair_after_wakes, Some(1));
     assert!(snapshot.packets.sent_by_type[11] >= 4);
+}
+
+/// What an idle HomePod on software 27.2 sent this engine: its Signaling with
+/// the clock identity, port number and sequence zeroed.
+const HOMEPOD_SIGNALING: &str = "1c02006a000004080000000000000000000000000000000000000000000000000580\
+00000000000000000000\
+00030016000d9300000100000301000000000000000000000000\
+00030020000d930000050000030100000000000000000000000000000000000000000000";
+
+fn unhex(text: &str) -> Vec<u8> {
+    (0..text.len())
+        .step_by(2)
+        .map(|at| u8::from_str_radix(&text[at..at + 2], 16).unwrap())
+        .collect()
+}
+
+#[test]
+fn apple_signaling_is_byte_identical_to_the_one_a_homepod_sends() {
+    let mut expected = unhex(HOMEPOD_SIGNALING);
+    assert_eq!(expected.len(), 106);
+    expected[20..28].copy_from_slice(&0x1122_3344_5566_7788u64.to_be_bytes());
+    expected[28..30].copy_from_slice(&0x8005u16.to_be_bytes());
+    expected[30..32].copy_from_slice(&9u16.to_be_bytes());
+    assert_eq!(apple_signaling(0x1122_3344_5566_7788, 9), expected);
+}
+
+#[test]
+fn sync_carries_no_origin_timestamp_and_follow_up_carries_the_precise_one() {
+    let (sync, follow) = sync_pair(7, 3, 5_000_000_123);
+    assert_eq!(&sync[34..44], &[0; 10]);
+    assert_eq!(sync[6..8], [0x06, 0x08]);
+    assert_eq!(read_timestamp(&follow[34..44]), Some(5_000_000_123));
+}
+
+/// Everything a receiver hears from the engine in `duration`, while `reply`
+/// may answer each packet.
+fn listen(
+    follow: bool,
+    quiet: bool,
+    duration: Duration,
+    mut reply: impl FnMut(&[u8], &UdpSocket, &UdpSocket, SocketAddr, SocketAddr, &Clock),
+) -> (PeerSnapshot, Vec<Vec<u8>>) {
+    let (peer, remote_event, remote_general) = crate::test_net::ptp_receiver_sockets();
+    remote_event.set_nonblocking(true).unwrap();
+    remote_general.set_nonblocking(true).unwrap();
+    let event = UdpSocket::bind("127.0.0.1:0").unwrap();
+    let general = UdpSocket::bind("127.0.0.1:0").unwrap();
+    let local_event = event.local_addr().unwrap();
+    let local_general = general.local_addr().unwrap();
+    let clock = Clock::new();
+    let followers = if follow { vec![peer] } else { Vec::new() };
+    let timer =
+        PtpMaster::from_sockets(vec![peer], followers, clock.clone(), event, general).unwrap();
+    if quiet {
+        timer.follow_quietly(peer);
+    }
+    timer.activate(peer, "127.0.0.1".parse().unwrap());
+    let started = Instant::now();
+    let mut buffer = [0u8; 2048];
+    let mut heard = Vec::new();
+    while started.elapsed() < duration {
+        for socket in [&remote_general, &remote_event] {
+            while let Ok((n, _)) = socket.recv_from(&mut buffer) {
+                heard.push(buffer[..n].to_vec());
+            }
+        }
+        reply(
+            &[],
+            &remote_event,
+            &remote_general,
+            local_event,
+            local_general,
+            &clock,
+        );
+        thread::sleep(Duration::from_millis(5));
+    }
+    (timer.snapshots().remove(0), heard)
+}
+
+#[test]
+fn sender_clock_announces_syncs_and_signals_like_an_ios_sender() {
+    let mut sequence = 0u16;
+    let mut next = Instant::now();
+    let (snapshot, heard) = listen(
+        false,
+        false,
+        Duration::from_millis(2300),
+        |_, event, _, local_event, _, clock| {
+            // The receiver follows: it measures the path with Delay_Req.
+            if Instant::now() >= next {
+                next = Instant::now() + Duration::from_millis(125);
+                let mut request = header(1, 44, 8, sequence, 0x0408, -3);
+                timestamp(&mut request[34..44], clock.now_ns());
+                event.send_to(&request, local_event).unwrap();
+                sequence += 1;
+            }
+        },
+    );
+    let count = |kind: u8| heard.iter().filter(|p| p[0] & 15 == kind).count();
+    // Announce and Signaling start at once and repeat every second.
+    assert!((2..=4).contains(&count(11)), "announces {}", count(11));
+    assert_eq!(count(11), count(12));
+    // Sync and Follow_Up eight times a second.
+    assert!(count(0) >= 12 && count(0) == count(8), "syncs {}", count(0));
+    let announced = heard.iter().find(|p| p[0] & 15 == 11).unwrap();
+    assert_eq!(announced.len(), 76);
+    assert_eq!(&announced[47..53], &[128, 6, 0x21, 0x43, 0x6a, 128]);
+    let signalled = heard.iter().find(|p| p[0] & 15 == 12).unwrap();
+    assert_eq!(signalled.len(), 106);
+    assert_eq!(&signalled[54..58], &[0, 0, 3, 1]);
+    // Announce and Signaling count on their own, as an Apple clock numbers them.
+    let sequences: Vec<u16> = heard
+        .iter()
+        .filter(|p| p[0] & 15 == 11)
+        .map(|p| u16::from_be_bytes([p[30], p[31]]))
+        .collect();
+    assert_eq!(&sequences[..2], &[0, 1]);
+    // No request for the receiver's Announce: an iOS sender never sends one.
+    assert!(heard.iter().all(|p| !(p[0] & 15 == 12 && p.len() == 54)));
+    // Delay_Resp is two-step flagged and names the requester.
+    let response = heard.iter().find(|p| p[0] & 15 == 9).unwrap();
+    assert_eq!(response[6..8], [0x06, 0x08]);
+    assert_eq!(&response[44..52], &8u64.to_be_bytes());
+    assert!(
+        snapshot.ready,
+        "three answered Delay_Req make the clock ready"
+    );
+    assert_eq!(snapshot.strategy, "sender");
+}
+
+#[test]
+fn sender_clock_records_what_the_receiver_announces_and_whether_it_knows_us() {
+    let mut sent = false;
+    let (snapshot, _) = listen(
+        false,
+        false,
+        Duration::from_millis(400),
+        |_, _, general, _, local_general, _| {
+            if sent {
+                return;
+            }
+            sent = true;
+            // A HomePod that has not yielded: it still announces itself.
+            let mut homepod = peer_announce(8, 1);
+            homepod[47] = 248;
+            homepod[48..53].copy_from_slice(&[248, 0x21, 0x43, 0x6a, 245]);
+            general.send_to(&homepod, local_general).unwrap();
+        },
+    );
+    assert_eq!(snapshot.bmca_priority1, Some(248));
+    assert_eq!(snapshot.bmca_grandmaster, Some(8));
+    assert!(!snapshot.better_master);
+    assert!(!snapshot.named_by_peer);
+    assert_eq!(snapshot.announces_naming_us, 0);
+}
+
+#[test]
+fn a_quietly_followed_receiver_is_sent_nothing_and_locks_from_its_sync_alone() {
+    let mut sequence = 0u16;
+    let mut next = Instant::now();
+    let (snapshot, heard) = listen(
+        true,
+        true,
+        Duration::from_millis(1500),
+        |_, event, general, local_event, local_general, clock| {
+            if Instant::now() >= next {
+                next = Instant::now() + Duration::from_millis(125);
+                general
+                    .send_to(&peer_announce(8, sequence), local_general)
+                    .unwrap();
+                let (sync, follow) = sync_pair(8, sequence, clock.now_ns() + 7_000_000_000);
+                event.send_to(&sync, local_event).unwrap();
+                general.send_to(&follow, local_general).unwrap();
+                sequence += 1;
+            }
+        },
+    );
+    assert!(
+        heard.is_empty(),
+        "{} packets sent to a quiet peer",
+        heard.len()
+    );
+    assert!(snapshot.ready);
+    assert_eq!(snapshot.strategy, "follow_quiet");
+    assert_eq!(snapshot.offset_source, Some("sync"));
+    assert_eq!((snapshot.introductions, snapshot.wake_attempts), (0, 0));
+    assert_eq!(snapshot.packets.sent_by_type.iter().sum::<u64>(), 0);
+}
+
+#[test]
+fn an_actively_followed_receiver_gets_the_apple_signaling_every_second() {
+    let (snapshot, heard) = listen(
+        true,
+        false,
+        Duration::from_millis(1400),
+        |_, _, _, _, _, _| {},
+    );
+    let signalling = heard
+        .iter()
+        .filter(|p| p[0] & 15 == 12 && p.len() == 106)
+        .count();
+    assert_eq!(signalling, 2, "one at activation and one a second later");
+    assert_eq!(snapshot.strategy, "follow_active");
+    // It never offers the receiver this engine's grandmaster dataset.
+    assert!(heard.iter().all(|p| !(p[0] & 15 == 11 && p.len() == 76)));
+}
+
+#[test]
+fn delay_responses_that_jump_or_contradict_sync_keep_the_followed_clock_ready() {
+    let start = Instant::now();
+    let mut state = follower(start);
+    let receiver_offset: i128 = 4_200_000_000;
+    let respond = |state: &mut PeerState, seq: u16, local: u64, skew: i128, at: Instant| {
+        state.delay = Some((seq, local + 200_000));
+        state.delay_age = Some(at);
+        let mut response = header(9, 54, 8, seq, 0x0408, 0);
+        let remote = (local as i128 + 250_000 + receiver_offset + skew) as u64;
+        timestamp(&mut response[34..44], remote);
+        response[44..52].copy_from_slice(&7u64.to_be_bytes());
+        response[52..54].copy_from_slice(&0x8005u16.to_be_bytes());
+        followed_packet(state, &response, local + 400_000, at, 7);
+    };
+    // Three clean responses, one 14 ms out (Wi-Fi jitter: the offset moves 7 ms),
+    // then one 40 ms out, as a HomePod's delay timestamps can be.
+    let skews = [0, 0, 0, 14_000_000, 40_000_000];
+    let reasons = [
+        None,
+        None,
+        None,
+        Some("offset_jump"),
+        Some("delay_disagrees_with_sync"),
+    ];
+    for (seq, (skew, reason)) in skews.into_iter().zip(reasons).enumerate() {
+        let seq = seq as u16;
+        let at = start + Duration::from_millis(u64::from(seq) * 125);
+        let local = 1_000_000_000 + u64::from(seq) * 125_000_000;
+        let (sync, follow) = sync_pair(8, seq, (local as i128 + receiver_offset) as u64);
+        followed_packet(&mut state, &sync, local + 50_000, at, 7);
+        followed_packet(&mut state, &follow, local + 55_000, at, 7);
+        respond(&mut state, seq, local, skew, at);
+        assert_eq!(state.packets.last_rejection, reason, "response {seq}");
+        let now = at + Duration::from_millis(1);
+        assert_eq!(state.exchanges, u64::from(seq) + 1, "the streak survives");
+        assert!(state.stale_for(now).is_some());
+        if seq >= 2 {
+            assert!(
+                state.ready(now),
+                "response {seq} must not unready the clock"
+            );
+        }
+        // A refused response drops the refinement; Sync carries the timeline.
+        let source = if reason.is_some() { "sync" } else { "delay" };
+        assert_eq!(state.offset_source(now), Some(source), "response {seq}");
+        let offset = state.effective_offset(now).unwrap();
+        assert!((offset - receiver_offset as f64).abs() < 200_000.0);
+    }
+    assert_eq!(state.packets.rejected, 2);
 }

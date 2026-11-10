@@ -121,7 +121,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
         Endpoints.Failed += ShowError;
         _settings = store.Load();
         _discovery.SetInterface(_settings.DiscoveryInterfaceId);
-        Session = new(factory, audio, AppPaths.Log);
+        Session = new(factory, audio, AppPaths.Log, clockStrategies: new(Path.Combine(AppPaths.DataDirectory, "clock-strategy.json")));
         Session.Changed += SessionChanged;
         // A receiver's own buttons arrive as transport commands; forward them to the
         // media keys so the app that is playing reacts, without touching the stream.

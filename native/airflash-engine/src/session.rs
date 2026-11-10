@@ -4,6 +4,7 @@ use crate::{
     clock::{Clock, PtpMaster},
     crypto::derive,
     preemption,
+    profile::ClockStrategy,
     rtp::{self, FRAMES, PCM_BYTES, Packetizer},
     rtsp::{Cancellation, Connection},
     telemetry::TimelineResetReason,
@@ -618,8 +619,14 @@ impl Member {
                 .map(|p| p.host)
                 .collect();
             let timer = PtpMaster::start_with_followers(peers, followers, clock.clone())?;
-            // Timing is activated after SETPEERS below. Automatic role negotiation
-            // before activation cannot send probes; keep the configured clock role.
+            for quiet in options.peers.iter().filter(|p| {
+                p.profile.follow_receiver_clock
+                    && p.profile.clock_strategy == Some(ClockStrategy::FollowQuiet)
+            }) {
+                timer.follow_quietly(quiet.host);
+            }
+            // A sender clock starts on the session SETUP reply; a followed one
+            // after SETPEERS. The clock role is the configured one.
             *ptp = Some(timer);
         }
         let clock_id = compat.uses_ptp().then(|| ptp.as_ref().unwrap().clock_id);
@@ -688,11 +695,18 @@ impl Member {
         };
         // RAII owns the connection before SETUP so partial handshakes are torn down too.
         let sender_id = "02:57:32:41:50:01";
+        let session_uuid = Uuid::new_v4().to_string();
+        // A Mac that follows a single HomePod names no clock of its own, matches
+        // clock ports by override, and never sends SETPEERS: the timing port the
+        // HomePod opens for this SETUP is the one it keeps.
+        let mac_style = member.compat.follows_receiver_clock()
+            && peer.profile.clock_strategy == Some(ClockStrategy::FollowActive)
+            && options.peers.len() == 1;
         let mut setup = vec![
             ("deviceID", string(sender_id)),
             ("macAddress", string(sender_id)),
             ("name", string("AirFlash")),
-            ("sessionUUID", string(Uuid::new_v4().to_string())),
+            ("sessionUUID", string(&session_uuid)),
             ("timingProtocol", string(member.compat.timing_protocol())),
             ("isMultiSelectAirPlay", Value::Boolean(true)),
             ("groupContainsGroupLeader", Value::Boolean(false)),
@@ -702,13 +716,23 @@ impl Member {
             setup.push(("groupUUID", string(group)));
         }
         if let Some(id) = clock_id {
-            let peer_info = dictionary(vec![
-                ("ID", string(Uuid::new_v4().to_string())),
-                ("DeviceType", number(0)),
-                ("ClockID", number(id)),
-                ("SupportsClockPortMatchingOverride", Value::Boolean(false)),
-                ("Addresses", Value::Array(vec![string(local.to_string())])),
-            ]);
+            let addresses = Value::Array(vec![string(local.to_string())]);
+            let peer_info = if mac_style {
+                setup.push(("timingPort", number(319)));
+                dictionary(vec![
+                    ("ID", string(&session_uuid)),
+                    ("SupportsClockPortMatchingOverride", Value::Boolean(true)),
+                    ("Addresses", addresses),
+                ])
+            } else {
+                dictionary(vec![
+                    ("ID", string(Uuid::new_v4().to_string())),
+                    ("DeviceType", number(0)),
+                    ("ClockID", number(id)),
+                    ("SupportsClockPortMatchingOverride", Value::Boolean(false)),
+                    ("Addresses", addresses),
+                ])
+            };
             setup.push(("timingPeerInfo", peer_info.clone()));
             setup.push(("timingPeerList", Value::Array(vec![peer_info])));
         } else {
@@ -734,6 +758,12 @@ impl Member {
                 "timing_peer_info":reply.and_then(|d| d.get("timingPeerInfo")).and_then(|v| serde_json::to_value(v).ok()),
             }));
         }
+        if clock_id.is_some() && !member.compat.follows_receiver_clock() {
+            // An iOS sender is announcing, syncing and signalling by the time
+            // RECORD arrives, so the receiver meets the session clock on the
+            // timing port it has just opened for this sender.
+            ptp.as_ref().unwrap().activate(peer.host, local);
+        }
         let event_port = get_port(&response, "eventPort")?;
         member.event_addr = Some(SocketAddr::new(peer.host, event_port));
         member.events = Some(EventWorker::connect(
@@ -743,18 +773,22 @@ impl Member {
         )?);
         member.record()?;
         if clock_id.is_some() {
-            let mut peers: Vec<Value> = options
-                .peers
-                .iter()
-                .map(|p| string(p.host.to_string()))
-                .collect();
-            peers.push(string(local.to_string()));
-            member.conn.lock().unwrap().plist_request(
-                "SETPEERS",
-                &member.uri,
-                &Value::Array(peers),
-            )?;
-            ptp.as_ref().unwrap().activate(peer.host, local);
+            if !mac_style {
+                let mut peers: Vec<Value> = options
+                    .peers
+                    .iter()
+                    .map(|p| string(p.host.to_string()))
+                    .collect();
+                peers.push(string(local.to_string()));
+                member.conn.lock().unwrap().plist_request(
+                    "SETPEERS",
+                    &member.uri,
+                    &Value::Array(peers),
+                )?;
+            }
+            if member.compat.follows_receiver_clock() {
+                ptp.as_ref().unwrap().activate(peer.host, local);
+            }
         }
         let requested_latency = peer.profile.latency_ms.unwrap_or(options.latency_ms);
         let latency = (requested_latency as u64 * rate as u64) / 1000;

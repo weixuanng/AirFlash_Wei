@@ -20,8 +20,24 @@ pub struct Profile {
     pub features: Option<u64>,
     #[serde(default)]
     pub follow_receiver_clock: bool,
+    /// How a followed receiver's clock is approached, when the desktop is trying
+    /// the known arrangements in turn. Absent: follow as configured.
+    #[serde(default)]
+    pub clock_strategy: Option<ClockStrategy>,
     #[serde(default)]
     pub latency_ms: Option<u32>,
+}
+/// The clock arrangements tried in turn on a standalone HomePod on software 27.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ClockStrategy {
+    /// The engine supplies the clock, as an iOS sender does.
+    Sender,
+    /// Follow the receiver and send it no timing traffic (Music Assistant).
+    FollowQuiet,
+    /// Follow the receiver the way a Mac does: describe this sender as a timing
+    /// peer without a clock of its own, introduce it, and send no SETPEERS.
+    FollowActive,
 }
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -681,6 +697,29 @@ impl Formats {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn clock_strategy_is_read_from_the_desktop_profile_and_is_optional() {
+        for (text, expected) in [
+            ("sender", ClockStrategy::Sender),
+            ("follow_quiet", ClockStrategy::FollowQuiet),
+            ("follow_active", ClockStrategy::FollowActive),
+        ] {
+            let profile: Profile = serde_json::from_value(serde_json::json!({
+                "timing": "auto", "follow_receiver_clock": true, "clock_strategy": text
+            }))
+            .unwrap();
+            assert_eq!(profile.clock_strategy, Some(expected));
+        }
+        // The desktop sends null when the receiver is not tried in turn.
+        let plain: Profile =
+            serde_json::from_value(serde_json::json!({"clock_strategy": null})).unwrap();
+        assert_eq!(plain.clock_strategy, None);
+        assert_eq!(Profile::default().clock_strategy, None);
+        assert!(
+            serde_json::from_value::<Profile>(serde_json::json!({"clock_strategy": "other"}))
+                .is_err()
+        );
+    }
     #[test]
     fn firmware_parsing_agrees_with_desktop_and_missing_evidence_stays_unknown() {
         for (version, expected) in [

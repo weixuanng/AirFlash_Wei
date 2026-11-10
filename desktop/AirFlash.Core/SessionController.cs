@@ -22,8 +22,9 @@ public sealed record SessionTiming(TimeSpan Connect, TimeSpan Read, TimeSpan Pin
     public TimeSpan YieldBase => Yield ?? TimeSpan.FromSeconds(5);
     public static SessionTiming Default { get; } = new(TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(120), TimeSpan.FromSeconds(1));
 }
-public sealed class SessionController(IEngineFactory factory, IAudioService audio, Action<string>? log = null, SessionTiming? timing = null, Action<DesktopSessionRecord>? sessionRecords = null, TimeProvider? clock = null) : IAsyncDisposable
+public sealed class SessionController(IEngineFactory factory, IAudioService audio, Action<string>? log = null, SessionTiming? timing = null, Action<DesktopSessionRecord>? sessionRecords = null, TimeProvider? clock = null, ClockStrategyPlan? clockStrategies = null) : IAsyncDisposable
 {
+    private readonly ClockStrategyPlan _clockStrategies = clockStrategies ?? new();
     private readonly SemaphoreSlim _serial = new(1, 1);
     private readonly SemaphoreSlim _audioWriter = new(1, 1);
     private readonly SemaphoreSlim _diagnosticWriter = new(1, 1);
@@ -240,11 +241,18 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
     public event Action<SessionSnapshot>? Changed;
     public bool Muted => _muted;
     private static ReceiverOptions ProfileOptions(Receiver receiver, Receiver member, AppSettings settings) => settings.ReadOptions(receiver.IsGroup && !receiver.IsSoftwareGroup ? receiver.Id : member.Id);
-    private static object PeerProfile(Receiver receiver, Receiver member, AppSettings settings, ReceiverProfile? negotiated = null, int? adaptiveTarget = null)
+    /// <summary>
+    /// True for the one case where the clock arrangement is tried in turn: a single
+    /// receiver that looks like a standalone HomePod on software 27, left on Automatic.
+    /// </summary>
+    private static bool RotatesClockStrategy(Receiver receiver, AppSettings settings) =>
+        !receiver.IsGroup && receiver.FollowReceiverClock && ProfileOptions(receiver, receiver, settings).Timing == "auto";
+    private static object PeerProfile(Receiver receiver, Receiver member, AppSettings settings, ReceiverProfile? negotiated = null, int? adaptiveTarget = null, string? clockStrategy = null)
     {
         var options = ProfileOptions(receiver, member, settings);
-        return new { codec = options.Codec, transport = options.Transport, timing = options.Timing == "follow" ? "ptp" : options.Timing,
-            follow_receiver_clock = options.Timing == "follow" || options.Timing == "auto" && member.FollowReceiverClock, features = member.Features,
+        var follow = clockStrategy is null ? options.Timing == "follow" || options.Timing == "auto" && member.FollowReceiverClock : clockStrategy != ClockStrategyPlan.Sender;
+        return new { codec = options.Codec, transport = options.Transport, timing = clockStrategy == ClockStrategyPlan.Sender || options.Timing == "follow" ? "ptp" : options.Timing,
+            follow_receiver_clock = follow, clock_strategy = clockStrategy, features = member.Features,
             channel = receiver.IsSoftwareGroup ? member.Channel : "stereo", sync_offset_ms = receiver.IsSoftwareGroup ? member.SyncOffsetMs : 0,
             latency_ms = adaptiveTarget ?? InitialLatency(receiver, member, settings, negotiated) };
     }
@@ -651,9 +659,15 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
                 receiver = _receiver;
             }
             var startedAt = 0L;
+            string? clockStrategy = null;
             try
             {
                 var settings = _settings;
+                if (RotatesClockStrategy(receiver, settings))
+                {
+                    clockStrategy = _clockStrategies.Current(receiver.Id);
+                    log?.Invoke($"Clock strategy: {clockStrategy}; receiver {receiver.Id}; attempt {attempts}");
+                }
                 if (LatencyPolicy.ForceConflict(settings, receiver) is { } conflict)
                     throw new EngineFailure(new("forced_latency_conflict", "", "setup", conflict, false));
                 var forceLatency = LatencyPolicy.Forced(settings, receiver);
@@ -665,7 +679,7 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
                     var host = await ResolveAsync(member.Address, cancellation).ConfigureAwait(false);
                     volumeHost ??= host;
                     hosts[member.Id] = host;
-                    peers.Add(new { receiver_id = member.Id, host, port = member.Port, codecs = member.Codecs.Select(x => (int)x).ToArray(), profile = PeerProfile(receiver, member, settings) });
+                    peers.Add(new { receiver_id = member.Id, host, port = member.Port, codecs = member.Codecs.Select(x => (int)x).ToArray(), profile = PeerProfile(receiver, member, settings, clockStrategy: clockStrategy) });
                 }
                 await using var connection = factory.Open();
                 recoveryHealth.BeginAttempt(hosts.Values);
@@ -703,7 +717,7 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
                     foreach (var member in receiver.Peers.OrderByDescending(p => p.IsLeader))
                         peers.Add(new { receiver_id = member.Id, host = hosts[member.Id], port = member.Port,
                             codecs = member.Codecs.Select(x => (int)x).ToArray(),
-                            profile = PeerProfile(receiver, member, settings, selected.FirstOrDefault(s => s.ReceiverId == member.Id)?.Profile, adaptiveMode ? _adaptiveBase : null) });
+                            profile = PeerProfile(receiver, member, settings, selected.FirstOrDefault(s => s.ReceiverId == member.Id)?.Profile, adaptiveMode ? _adaptiveBase : null, clockStrategy) });
                     await _equalizerWriter.WaitAsync(cancellation).ConfigureAwait(false);
                     try
                     {
@@ -800,6 +814,7 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
                             yieldWaits = 0;
                             await ApplyLocalMuteAsync().ConfigureAwait(false);
                             log?.Invoke($"Streaming started: {receiver.Id}; target latency {_adaptiveBase} ms; reconnect attempts {attempts}");
+                            if (clockStrategy is not null) _clockStrategies.Worked(receiver.Id);
                             Publish(epoch, PlaybackState.Streaming);
                             await PublishNowPlayingAsync(_nowPlaying, cancellation).ConfigureAwait(false);
                         }
@@ -929,6 +944,10 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
                 }
                 ++attempts;
                 if (RecordFailure(epoch, error) is not { } notice) return;
+                // This arrangement never reached streaming: offer the next one on the
+                // following attempt. A session that streamed keeps its arrangement.
+                if (clockStrategy is not null && startedAt == 0 && notice.Code is not ("preempted" or "ownership_unconfirmed"))
+                    log?.Invoke($"Clock strategy {clockStrategy} did not start ({notice.Code}); next: {_clockStrategies.Failed(receiver.Id)}");
                 if (notice.Code is "preempted" or "ownership_unconfirmed" && _settings.ResumeAfterTakeover)
                 {
                     // Yield instead of fighting: wait one backoff step, then retry.
