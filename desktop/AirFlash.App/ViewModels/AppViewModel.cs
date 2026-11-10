@@ -151,6 +151,9 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
         _ => "idle"
     };
     public bool StatusBusy => StatusTone == "busy";
+    /// <summary>The status lines under the controls. Hidden while streaming, when the
+    /// green dot on the speaker's row says all there is to say.</summary>
+    public bool ShowStatus => StatusTone != "live";
     /// <summary>Drives the Dynamic Island style error pop-up at the top of the panel.</summary>
     public bool IslandActive => EngineFailed || StatusTone == "error";
     public string IslandTitle => EngineFailed ? L.Get("Could not start the audio engine.") : StatusTitle;
@@ -509,7 +512,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
         if (Session.RequiresManualReconnect) _autoSuppressed = true;
         Notify(nameof(Snapshot));
         if (title != StatusTitle) Notify(nameof(StatusTitle));
-        if (tone != StatusTone) { Notify(nameof(StatusTone)); Notify(nameof(StatusBusy)); }
+        if (tone != StatusTone) { Notify(nameof(StatusTone)); Notify(nameof(StatusBusy)); Notify(nameof(ShowStatus)); }
         NotifyIsland();
         if (detail != StatusDetail) Notify(nameof(StatusDetail));
         if (errors != ErrorDetails) Notify(nameof(ErrorDetails));
@@ -578,7 +581,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
     }
     private void RefreshStopUi()
     {
-        Notify(nameof(IsStopping)); Notify(nameof(StatusTitle)); Notify(nameof(StatusTone)); Notify(nameof(StatusBusy)); NotifyIsland(); Notify(nameof(StatusDetail)); Notify(nameof(CanReconnect));
+        Notify(nameof(IsStopping)); Notify(nameof(StatusTitle)); Notify(nameof(StatusTone)); Notify(nameof(StatusBusy)); Notify(nameof(ShowStatus)); NotifyIsland(); Notify(nameof(StatusDetail)); Notify(nameof(CanReconnect));
         StopCommand.Refresh(); ReconnectCommand.Refresh();
         foreach (var row in Receivers) row.Refresh();
         RefreshPrimary();
