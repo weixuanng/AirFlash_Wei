@@ -8,7 +8,7 @@ Changes since Airplay 0.2.8.
 
 ## Sharing the HomePod with an iPhone
 
-- **Airplay no longer takes the HomePod back from an iPhone.** When audio was moved from an iPhone to the HomePod, the HomePod ended Airplay's session and Airplay reconnected within seconds, cutting the iPhone off. The HomePod plays handed-over audio itself and does not report an AirPlay session for it, so Airplay judged it free. Airplay now also reads the HomePod's "playing" flag, waits while it is set, and resumes once the HomePod is idle.
+- **Airplay no longer takes the HomePod back from an iPhone.** When audio was moved from an iPhone to the HomePod, the HomePod ended Airplay's session and Airplay reconnected within seconds, cutting the iPhone off. The HomePod plays handed-over audio itself and does not report an AirPlay session for it, so Airplay judged it free. Airplay now also reads the HomePod's "playing" flag, waits while it is set, and resumes within about 30 seconds of the HomePod going idle. If it ever keeps waiting when the HomePod is free, press Reconnect to take it back.
 - After the HomePod ends a session, Airplay waits 4 seconds before checking whether it is free.
 
 Neither change has been tested against a real HomePod. The "playing" flag was identified from one HomePod mini 2 on software 27.2.

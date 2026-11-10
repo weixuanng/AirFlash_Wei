@@ -959,7 +959,7 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
                     var held = streamedAt == 0 ? TimeSpan.Zero : Stopwatch.GetElapsedTime(streamedAt);
                     // A refusal before any clock work (say, the receiver rejects the sender
                     // clock outright) also moves on, unless this arrangement is proven.
-                    if (streamedAt == 0 && (notice.Code == "clock_not_ready" || notice.Retryable == false && !_clockStrategies.IsProven(receiver.Id))
+                    if (streamedAt == 0 && (notice.Code == "clock_not_ready" || notice.Retryable == false && notice.Code is not ("preempted" or "ownership_unconfirmed" or "forced_latency_conflict") && !_clockStrategies.IsProven(receiver.Id))
                         || streamedAt != 0 && held < ClockProvenAfter && notice.Code is "clock_lost" or "timeline_expired")
                         log?.Invoke($"Clock strategy {clockStrategy} did not hold ({notice.Code}); next: {_clockStrategies.Failed(receiver.Id)}");
                     else if (held >= ClockProvenAfter) _clockStrategies.Worked(receiver.Id);

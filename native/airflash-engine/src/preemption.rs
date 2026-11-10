@@ -49,7 +49,7 @@
 //! `ReceiverStatusFlags.ReceiverSessionActive = 131072 (0x20000, bit 17)`,
 //! `ReceiverStatusFlags.StereoPartnerUnreachable = 16384 (0x4000, bit 14)` and
 //! `ReceiverAccessPolicy.PasswordRequiredFlag = 128 (0x80, bit 7)`, all on a
-//! 64-bit (`ulong`) field. Only the session bit is a decision input, and it is
+//! 64-bit (`ulong`) field. The session bit and the playing bit (bit 20) are the decision inputs; the session bit is
 //! **not** an "another sender" bit: it is true for our own session too. The
 //! reference sender's "is playing another sender's session" line is context —
 //! it probes from a reclaim path that already lost the session — so [`classify`]

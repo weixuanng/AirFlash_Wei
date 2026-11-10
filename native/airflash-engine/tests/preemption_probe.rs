@@ -129,7 +129,7 @@ fn other_bits_and_high_64_bit_values_never_change_the_verdict() {
         PASSWORD_REQUIRED | STEREO_PARTNER_UNREACHABLE,
         1 << 40,
         (1 << 40) | PASSWORD_REQUIRED,
-        !RECEIVER_SESSION_ACTIVE,
+        !(RECEIVER_SESSION_ACTIVE | preemption::RECEIVER_PLAYING),
     ] {
         for we_hold_session in [false, true] {
             let (address, server) = serve_info(Some(flags), 1);

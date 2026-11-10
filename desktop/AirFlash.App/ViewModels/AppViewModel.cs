@@ -46,7 +46,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
     public AppSettings Settings => _settings;
     public SessionSnapshot Snapshot => _snapshot;
     /// <summary>The speaker reports its own volume and accepts a new one for this session.</summary>
-    public bool VolumeAvailable => _snapshot is { State: PlaybackState.Streaming, Receiver.IsSoftwareGroup: false, DeviceVolume.Available: true };
+    public bool VolumeAvailable => _snapshot is { State: PlaybackState.Streaming or PlaybackState.Standby, Receiver.IsSoftwareGroup: false, DeviceVolume.Available: true };
     /// <summary>The speaker's own volume, 0 to 100: the level its touch surface changes.</summary>
     public double DeviceVolume
     {
