@@ -397,5 +397,9 @@
   "Lowest (adapts)": "Niedrigste (passt sich an)",
   "Balanced": "Ausgewogen",
   "Most stable": "Am stabilsten",
-  "Lowest keeps sound closest to video and steps the delay up only if the stream has trouble. Most stable gives lost packets time to be sent again.": "„Niedrigste“ hält den Ton am nächsten am Bild und erhöht die Verzögerung nur bei Problemen. „Am stabilsten“ gibt verlorenen Paketen Zeit für eine erneute Übertragung."
+  "Lowest keeps sound closest to video and steps the delay up only if the stream has trouble. Most stable gives lost packets time to be sent again.": "„Niedrigste“ hält den Ton am nächsten am Bild und erhöht die Verzögerung nur bei Problemen. „Am stabilsten“ gibt verlorenen Paketen Zeit für eine erneute Übertragung.",
+  "Hide this speaker": "Diesen Lautsprecher ausblenden",
+  "Show hidden speakers ({0})": "Ausgeblendete Lautsprecher anzeigen ({0})",
+  "Volume keys control the speaker": "Lautstärketasten steuern den Lautsprecher",
+  "While connected, the keyboard volume keys change the speaker instead of this PC.": "Solange verbunden, ändern die Lautstärketasten den Lautsprecher statt diesen PC."
 }

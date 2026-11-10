@@ -380,5 +380,9 @@
   "Lowest (adapts)": "最低（自動調整）",
   "Balanced": "均衡",
   "Most stable": "最穩定",
-  "Lowest keeps sound closest to video and steps the delay up only if the stream has trouble. Most stable gives lost packets time to be sent again.": "「最低」讓聲音最接近畫面，僅在串流出現問題時才逐步增加延遲。「最穩定」讓遺失的封包有時間重新傳送。"
+  "Lowest keeps sound closest to video and steps the delay up only if the stream has trouble. Most stable gives lost packets time to be sent again.": "「最低」讓聲音最接近畫面，僅在串流出現問題時才逐步增加延遲。「最穩定」讓遺失的封包有時間重新傳送。",
+  "Hide this speaker": "隱藏此喇叭",
+  "Show hidden speakers ({0})": "顯示已隱藏的喇叭（{0}）",
+  "Volume keys control the speaker": "音量鍵控制喇叭",
+  "While connected, the keyboard volume keys change the speaker instead of this PC.": "連線期間，鍵盤音量鍵調整喇叭音量，而不是此電腦。"
 }

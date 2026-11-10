@@ -109,6 +109,11 @@
             <ItemsControl.ItemTemplate>
               <DataTemplate>
                 <Border Padding="10" Margin="0,0,0,8" CornerRadius="12" BorderThickness="1">
+                  <Border.ContextMenu>
+                    <ContextMenu>
+                      <MenuItem Header="{loc:Text 'Hide this speaker'}" Click="HideReceiver_Click"/>
+                    </ContextMenu>
+                  </Border.ContextMenu>
                   <Border.Style>
                     <Style TargetType="Border">
                       <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
@@ -150,6 +155,7 @@
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
+          <Button x:Name="ShowHidden" Click="ShowHidden_Click" Content="{Binding ShowHiddenLabel}" Visibility="{Binding HasHidden, Converter={StaticResource BoolVisibility}}" HorizontalAlignment="Left" Margin="4,0,0,8" Padding="0" Background="Transparent" BorderThickness="0" Cursor="Hand" Foreground="{DynamicResource AccentBrush}" FontSize="12"/>
         </StackPanel>
       </ScrollViewer>
       <StackPanel Grid.Row="3" Margin="2,4,2,0">
@@ -203,6 +209,7 @@
               <ComboBoxItem Content="{loc:Text 'Most stable'}"/>
             </ComboBox>
           </Grid>
+          <CheckBox x:Name="VolumeKeysOption" IsChecked="{Binding VolumeKeysEnabled, Mode=TwoWay}" Content="{loc:Text 'Volume keys control the speaker'}" ToolTip="{loc:Text 'While connected, the keyboard volume keys change the speaker instead of this PC.'}" Margin="0,0,0,6"/>
           <CheckBox x:Name="DirectCaptureOption" IsChecked="{Binding DirectCapture, Mode=TwoWay}" IsEnabled="{Binding DirectCaptureAvailable}" Content="{loc:Text 'Capture apps directly'}" ToolTip="{loc:Text 'Takes audio from apps before the PC speakers, so the PC can stay muted. Turn off if the speaker goes silent.'}"/>
         </StackPanel>
         <DockPanel>

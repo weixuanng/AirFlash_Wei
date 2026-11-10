@@ -15,6 +15,14 @@ Changes since Airplay 0.2.11.
 - If you had "Stable connection" ticked, you are now on Most stable. Pick Lowest to try the shorter delay.
 - A delay remains on every setting. Lowest has not been tested on a real HomePod. If the HomePod will not start on it, choose Balanced.
 
+## Everyday use
+
+- **The keyboard volume keys control the HomePod while it is connected.** Volume up and down change the speaker instead of the PC. The mute key is left to Windows. Untick "Volume keys control the speaker" to turn this off.
+- **The tray icon shows the state:** a green dot while streaming, amber while connecting or waiting for another device to finish, red on an error. Its tooltip shows the speaker volume.
+- **Speakers can be hidden.** Right-click a speaker you never use and choose "Hide this speaker". "Show hidden speakers" under the list brings them back.
+- With "Capture apps directly" on, changing the Windows output device now restarts the stream so the new device is muted as well.
+- Airplay already connects to the last speaker when Windows starts, so nothing changed there.
+
 ## Artwork
 
 - Sending artwork gets up to 15 seconds instead of 4 before it is given up on, so a slow moment on Wi-Fi no longer switches artwork off for the session.

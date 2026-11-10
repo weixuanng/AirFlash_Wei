@@ -60,6 +60,40 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
         }
     }
     public string DeviceVolumeText => $"{(int)DeviceVolume}";
+    private readonly PanelPreferences _panel = PanelPreferences.Load();
+    /// <summary>The keyboard's volume keys change the speaker while it is streaming.</summary>
+    public bool VolumeKeysEnabled
+    {
+        get => _panel.VolumeKeys;
+        set { if (value == _panel.VolumeKeys) return; _panel.VolumeKeys = value; _panel.Save(); AppPaths.Log($"Setting volume_keys={value}"); Notify(); }
+    }
+    /// <summary>Speakers the user has hidden from the list.</summary>
+    public int HiddenCount => _settings.Receivers.Values.Count(options => options.Hidden);
+    public bool HasHidden => HiddenCount > 0;
+    public string ShowHiddenLabel => L.Format("Show hidden speakers ({0})", HiddenCount);
+    public void HideReceiver(ReceiverViewModel row)
+    {
+        // The speaker in use stays: hiding it would leave a session with no row.
+        if (_snapshot.IsActive && _snapshot.Receiver?.Id == row.Receiver.Id) return;
+        _settings.Options(row.Receiver.Id).Hidden = true;
+        AppPaths.Log($"Receiver hidden: {row.Receiver.Id}");
+        HiddenChanged();
+    }
+    public void ShowHiddenReceivers()
+    {
+        foreach (var options in _settings.Receivers.Values) options.Hidden = false;
+        HiddenChanged();
+    }
+    private void HiddenChanged()
+    {
+        VolumeChanged(); RefreshReceivers();
+        Notify(nameof(HiddenCount)); Notify(nameof(HasHidden)); Notify(nameof(ShowHiddenLabel));
+    }
+    private void NotifyOptions()
+    {
+        Notify(nameof(DelayMode)); Notify(nameof(DirectCapture)); Notify(nameof(DirectCaptureAvailable));
+        Notify(nameof(HiddenCount)); Notify(nameof(HasHidden)); Notify(nameof(ShowHiddenLabel));
+    }
     /// <summary>
     /// How much audio the speaker holds, as an index into <see cref="DelayModes"/>:
     /// adaptive (starts at 50 ms and steps up only when the stream has trouble),
@@ -236,14 +270,13 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
             try { _defaultEndpoint = await _audio.GetDefaultEndpointIdAsync(); }
             catch (Exception error) { ShowError(error); }
             if (_closing) return;
-            // Latency is fixed to Real-time (120 ms), startup is always on and
-            // the theme follows the system: no UI edits these anymore, so a
-            // stale configuration value must never reach the engine or autostart.
+            // Startup is always on and the theme follows the system: no UI edits
+            // these anymore, so a stale configuration value must never reach the
+            // engine or autostart. The delay is one of the panel's three choices.
             var fixedDefaultsChanged = false;
-            // Two buffers are offered: Real-time (120 ms) and Stable (500 ms).
             if (!DelayModes.Contains(_settings.LatencyMode)) { _settings.LatencyMode = "realtime"; fixedDefaultsChanged = true; }
             if (_settings.ForceLatency != (_settings.LatencyMode == "buffered")) { _settings.ForceLatency = _settings.LatencyMode == "buffered"; fixedDefaultsChanged = true; }
-            Notify(nameof(DelayMode)); Notify(nameof(DirectCapture));
+            NotifyOptions();
             if (!_settings.StartAtLogin) { _settings.StartAtLogin = true; fixedDefaultsChanged = true; }
             if (_settings.Theme != "system") { _settings.Theme = "system"; fixedDefaultsChanged = true; }
             foreach (var options in _settings.Receivers.Values)
@@ -313,7 +346,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
             if (_closing) return;
             var next = await _audio.GetDefaultEndpointIdAsync();
             if (_closing) return;
-            if (!IsStopping && intent == _playIntent && _settings.CaptureMode == "loopback" && next != _defaultEndpoint && _snapshot.IsActive && _snapshot.State != PlaybackState.Pairing && _snapshot.Receiver is { } receiver) await Session.StartAsync(receiver, _settings.Clone());
+            if (!IsStopping && intent == _playIntent && _settings.CaptureMode is "loopback" or "system" && next != _defaultEndpoint && _snapshot.IsActive && _snapshot.State != PlaybackState.Pairing && _snapshot.Receiver is { } receiver) await Session.StartAsync(receiver, _settings.Clone());
             _defaultEndpoint = next;
             if (!_snapshot.IsActive) await _audio.RestoreAsync();
         }
@@ -351,7 +384,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
             ReceiverCatalog.ApplyMigrations(baseline, reconciliation.Migrations, currentSnapshot.Receiver?.Id);
             _settings = SettingsMerge.Merge(baseline, live, reconciliation.Settings);
             _volumeDirty = revision != _editRevision;
-            Notify(nameof(Settings)); SettingsChanged?.Invoke();
+            Notify(nameof(Settings)); NotifyOptions(); SettingsChanged?.Invoke();
             var migrated = reconciliation.Migrations.Where(p => p.Key != p.Value && (originalSettings.Receivers.ContainsKey(p.Key) || currentSnapshot.Receiver?.Id == p.Key)).ToArray();
             if (migrated.Length > 0) AppPaths.Log("Receiver identity migrated: " + System.Text.Json.JsonSerializer.Serialize(migrated));
         }
@@ -415,12 +448,12 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
         if (MixedGroupMigration.IsSettled(_settings))
         {
             await store.CompleteMixedGroupMigrationAsync(_settings);
-            Notify(nameof(Settings)); SettingsChanged?.Invoke();
+            Notify(nameof(Settings)); NotifyOptions(); SettingsChanged?.Invoke();
         }
         else if (report.Changed)
         {
             await SaveSettingsAsync(_settings);
-            Notify(nameof(Settings)); SettingsChanged?.Invoke();
+            Notify(nameof(Settings)); NotifyOptions(); SettingsChanged?.Invoke();
         }
     }
     private void MergeManualReceivers()
@@ -633,7 +666,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
                 if (before.DiscoveryInterfaceId != _settings.DiscoveryInterfaceId) _discovery.SetInterface(_settings.DiscoveryInterfaceId);
                 var oldCatalog = AllReceivers;
                 MergeManualReceivers(); RefreshReceivers();
-                Notify(nameof(Settings));
+                Notify(nameof(Settings)); NotifyOptions();
                 SettingsChanged?.Invoke();
                 if (!CatalogEqual(oldCatalog, AllReceivers)) CatalogChanged?.Invoke();
             }

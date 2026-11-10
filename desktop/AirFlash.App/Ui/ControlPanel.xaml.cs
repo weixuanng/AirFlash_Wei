@@ -18,6 +18,11 @@ public partial class ControlPanel : Window
     private DispatcherOperation? _placement;
     private DateTime _lastDismissed;
     public bool MenuOpen { get; set; }
+    private void HideReceiver_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: ReceiverViewModel row }) _viewModel.HideReceiver(row);
+    }
+    private void ShowHidden_Click(object sender, RoutedEventArgs e) => _viewModel.ShowHiddenReceivers();
     // The volume pill has no thumb: the pointer sets the level anywhere along it,
     // and keeps setting it while the button is held.
     private void VolumeSlider_SizeChanged(object sender, SizeChangedEventArgs e)

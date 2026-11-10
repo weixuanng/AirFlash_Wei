@@ -12,6 +12,7 @@ public sealed class TrayService : IDisposable
 {
     private readonly HwndSource _source;
     private AppIconService.NativeIcon _icon;
+    private readonly VolumeKeys _volumeKeys;
     private int _iconPixels;
     private bool _refreshQueued;
     private readonly TrayRegistration _registration;
@@ -41,6 +42,7 @@ public sealed class TrayService : IDisposable
         _source.AddHook(Hook);
         UpdateRetry(_registration.TryRegister());
         viewModel.PropertyChanged += OnPropertyChanged;
+        _volumeKeys = new(viewModel, panel.Dispatcher);
     }
     private static void Log(string message) => AppPaths.Log($"Tray path=\"{Environment.ProcessPath}\" {message}");
     private static AppIconService.NativeIcon LoadTrayIcon(int pixels)
@@ -79,18 +81,22 @@ public sealed class TrayService : IDisposable
     }
     private void OnPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
     {
-        if (args.PropertyName != nameof(AppViewModel.StatusTitle) || _lastTitle == _viewModel.StatusTitle) return;
-        _lastTitle = _viewModel.StatusTitle;
+        if (args.PropertyName is nameof(AppViewModel.StatusTone)) { if (_iconTone != _viewModel.StatusTone) QueueRefresh(); return; }
+        if (args.PropertyName is not (nameof(AppViewModel.StatusTitle) or nameof(AppViewModel.DeviceVolumeText) or nameof(AppViewModel.VolumeAvailable)) || _lastTitle == Tip) return;
+        _lastTitle = Tip;
         UiPerformance.Count("tray.update");
         UpdateRetry(_registration.Update());
     }
+    /// <summary>State, and the speaker's volume while there is one.</summary>
+    private string Tip => _viewModel.VolumeAvailable ? $"Airplay · {_viewModel.StatusTitle} · {_viewModel.DeviceVolumeText}%" : $"Airplay · {_viewModel.StatusTitle}";
+    private string _iconTone = "idle";
     private Guid IdentityGuid => _registration.Identity == TrayIdentity.Guid ? _guid : Guid.Empty;
     private bool Notify(TrayOperation operation, TrayIdentity identity) => Notify(operation, identity, _icon.DangerousGetHandle());
     private bool Notify(TrayOperation operation, TrayIdentity identity, IntPtr icon)
     {
         var data = new NotifyData { Size = (uint)Marshal.SizeOf<NotifyData>(), Window = _source.Handle, Id = 1,
             Flags = 1 | 2 | 4 | 0x80 | (identity == TrayIdentity.Guid ? 0x20u : 0), Callback = CallbackMessage,
-            Icon = icon, Tip = $"Airplay · {_viewModel.StatusTitle}", Guid = identity == TrayIdentity.Guid ? _guid : Guid.Empty,
+            Icon = icon, Tip = Tip, Guid = identity == TrayIdentity.Guid ? _guid : Guid.Empty,
             Info = "", InfoTitle = "", Version = operation == TrayOperation.SetVersion ? 4u : 0 };
         return Shell_NotifyIcon((uint)operation, ref data);
     }
@@ -110,15 +116,16 @@ public sealed class TrayService : IDisposable
     {
         if (!IsRegistered) { UpdateRetry(_registration.TryRegister()); return; }
         var pixels = AppIconService.Pixels(IconDpi(), true);
-        if (pixels == _iconPixels) return;
+        var tone = _viewModel.StatusTone;
+        if (pixels == _iconPixels && tone == _iconTone) return;
         AppIconService.NativeIcon? next = null;
         try
         {
-            next = AppIconService.Create(pixels);
+            next = AppIconService.Create(pixels, tone);
             var success = Notify(TrayOperation.Modify, _registration.Identity, next.DangerousGetHandle());
             _registration.ReportResult("RefreshIcon", success, _registration.Identity, $"pixels={pixels}");
             if (!success) { UpdateRetry(_registration.Update(), refresh: false); return; }
-            var previous = _icon; _icon = next; next = null; _iconPixels = pixels;
+            var previous = _icon; _icon = next; next = null; _iconPixels = pixels; _iconTone = tone;
             previous.Dispose();
         }
         catch (System.ComponentModel.Win32Exception error) { Log($"operation=RefreshIcon success=False error={error.Message}"); }
@@ -187,6 +194,7 @@ public sealed class TrayService : IDisposable
         if (ActiveMenu is { } menu) menu.IsOpen = false;
         _retry.Stop(); _retry.Tick -= Retry;
         _viewModel.PropertyChanged -= OnPropertyChanged;
+        _volumeKeys.Dispose();
         _registration.Dispose(); _source.Dispose();
         _icon.Dispose();
     }
