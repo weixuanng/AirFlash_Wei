@@ -45,6 +45,26 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
     public IReadOnlyList<Receiver> AllReceivers => _known.Values.Concat(SoftwareStereo.Resolve(_known.Values, _settings)).OrderBy(r => r.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
     public AppSettings Settings => _settings;
     public SessionSnapshot Snapshot => _snapshot;
+    /// <summary>The speaker reports its own volume and accepts a new one for this session.</summary>
+    public bool VolumeAvailable => _snapshot is { State: PlaybackState.Streaming, Receiver.IsSoftwareGroup: false, DeviceVolume.Available: true };
+    /// <summary>The speaker's own volume, 0 to 100: the level its touch surface changes.</summary>
+    public double DeviceVolume
+    {
+        get => _snapshot.DeviceVolume?.Display ?? 0;
+        set
+        {
+            var volume = (int)Math.Round(Math.Clamp(value, 0, 100));
+            if (!VolumeAvailable || _snapshot.Receiver is not { } receiver || volume == _snapshot.DeviceVolume?.Display) return;
+            _ = SetDeviceVolumeAsync(receiver.Id, volume);
+        }
+    }
+    public string DeviceVolumeText => $"{(int)DeviceVolume}";
+    private async Task SetDeviceVolumeAsync(string receiverId, int volume)
+    {
+        try { await Session.SetDeviceVolumeAsync(receiverId, volume); }
+        catch (OperationCanceledException) { }
+        catch (Exception error) { AppPaths.Log(error.ToString()); }
+    }
     private Task? _stopTask;
     private long _playIntent;
     public bool IsStopping { get; private set; }
@@ -404,7 +424,14 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
         if (_closing || !ReferenceEquals(snapshot, Session.Snapshot)) return;
         var title = StatusTitle; var tone = StatusTone; var detail = StatusDetail; var errors = ErrorDetails; var hint = ActionHint;
         var previous = _snapshot;
+        var volumeAvailable = VolumeAvailable; var volume = DeviceVolume;
         _snapshot = snapshot;
+        if (volumeAvailable != VolumeAvailable)
+        {
+            Notify(nameof(VolumeAvailable));
+            AppPaths.Log($"Speaker volume control available={VolumeAvailable}; status={snapshot.DeviceVolume?.Status}; volume={snapshot.DeviceVolume?.Actual}");
+        }
+        if (volume != DeviceVolume) { Notify(nameof(DeviceVolume)); Notify(nameof(DeviceVolumeText)); }
         if (Session.RequiresManualReconnect) _autoSuppressed = true;
         Notify(nameof(Snapshot));
         if (title != StatusTitle) Notify(nameof(StatusTitle));
