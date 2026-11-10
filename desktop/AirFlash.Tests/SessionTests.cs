@@ -439,22 +439,20 @@ public sealed class SessionTests
     }
 
     [Fact]
-    public async Task OnlyClockFailuresMoveToTheNextClockArrangement()
+    public async Task AFailureThatIsNotTheClockKeepsTheClockArrangement()
     {
-        var first = new FakeConnection(autoReady: false); var second = new FakeConnection(autoReady: false); var third = new FakeConnection();
+        var first = new FakeConnection(autoReady: false); var second = new FakeConnection();
         var plan = new ClockStrategyPlan();
-        await using var controller = new SessionController(new FakeFactory(first, second, third), new FakeAudio(),
+        await using var controller = new SessionController(new FakeFactory(first, second), new FakeAudio(),
             timing: Fast with { Connect = TimeSpan.FromSeconds(10) }, clockStrategies: plan);
         var settings = Settings(); settings.ForceReconnect = true;
         await controller.StartAsync(new Receiver("a", "a", "127.0.0.1") { FollowReceiverClock = true }, settings);
         // A network failure says nothing about the clock: the same arrangement is tried again.
         await first.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
         first.EmitData(new { @event = "error", code = "connection_lost", channel = "rtsp", host = "127.0.0.1", retryable = true, message = "Connection lost." });
-        await second.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        Assert.Equal(("ptp", false, "sender"), ClockProfile(second));
-        second.EmitData(new { @event = "error", code = "clock_not_ready", channel = "clock", host = "127.0.0.1", retryable = true, message = "PTP exchange did not become ready." });
         await Until(() => controller.Snapshot.State == PlaybackState.Streaming);
-        Assert.Equal(("auto", true, "follow_quiet"), ClockProfile(third));
+        Assert.Equal(("ptp", false, "sender"), ClockProfile(second));
+        Assert.Equal(ClockStrategyPlan.Sender, plan.Current("a"));
     }
 
     [Fact]
