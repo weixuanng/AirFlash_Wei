@@ -56,7 +56,8 @@ internal static class AppIconService
             var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(pixels, pixels, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
             bitmap.Render(visual);
             var bits = new byte[pixels * pixels * 4];
-            bitmap.CopyPixels(bits, pixels * 4, 0);
+            // An icon's colour bitmap is read as straight alpha, not premultiplied.
+            new System.Windows.Media.Imaging.FormatConvertedBitmap(bitmap, System.Windows.Media.PixelFormats.Bgra32, null, 0).CopyPixels(bits, pixels * 4, 0);
             IntPtr colourBitmap = CreateBitmap(pixels, pixels, 1, 32, bits), mask = CreateBitmap(pixels, pixels, 1, 1, new byte[((pixels + 15) / 16 * 2) * pixels]);
             try
             {

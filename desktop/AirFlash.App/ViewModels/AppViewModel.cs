@@ -60,6 +60,9 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
         }
     }
     public string DeviceVolumeText => $"{(int)DeviceVolume}";
+    /// <summary>A change would be accepted right now. The keyboard keys are only taken
+    /// from Windows while this holds, so a key is never swallowed for nothing.</summary>
+    public bool VolumeWritable => VolumeAvailable && _snapshot.DeviceVolume?.Available == true;
     private readonly PanelPreferences _panel = PanelPreferences.Load();
     /// <summary>The keyboard's volume keys change the speaker while it is streaming.</summary>
     public bool VolumeKeysEnabled
@@ -494,7 +497,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
         if (_closing || !ReferenceEquals(snapshot, Session.Snapshot)) return;
         var title = StatusTitle; var tone = StatusTone; var detail = StatusDetail; var errors = ErrorDetails; var hint = ActionHint;
         var previous = _snapshot;
-        var volumeAvailable = VolumeAvailable; var volume = DeviceVolume;
+        var volumeAvailable = VolumeAvailable; var volume = DeviceVolume; var volumeWritable = VolumeWritable;
         _snapshot = snapshot;
         if (volumeAvailable != VolumeAvailable)
         {
@@ -502,6 +505,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
             AppPaths.Log($"Speaker volume control available={VolumeAvailable}; status={snapshot.DeviceVolume?.Status}; volume={snapshot.DeviceVolume?.Actual}");
         }
         if (volume != DeviceVolume) { Notify(nameof(DeviceVolume)); Notify(nameof(DeviceVolumeText)); }
+        if (volumeWritable != VolumeWritable) Notify(nameof(VolumeWritable));
         if (Session.RequiresManualReconnect) _autoSuppressed = true;
         Notify(nameof(Snapshot));
         if (title != StatusTitle) Notify(nameof(StatusTitle));
@@ -536,7 +540,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
         try
         {
             if (_closing || IsStopping || intent != _playIntent || !EngineReady || Session.NeedsCleanup) return;
-            if (_settings.CaptureMode == "loopback") _defaultEndpoint = await _audio.GetDefaultEndpointIdAsync();
+            if (_settings.CaptureMode is "loopback" or "system") _defaultEndpoint = await _audio.GetDefaultEndpointIdAsync();
             if (_closing || IsStopping || intent != _playIntent) return;
             if (startIntent == SessionStartIntent.Manual) _autoSuppressed = false;
             Notice = "";

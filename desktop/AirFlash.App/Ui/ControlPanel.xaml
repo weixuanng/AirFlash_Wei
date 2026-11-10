@@ -110,7 +110,7 @@
               <DataTemplate>
                 <Border Padding="10" Margin="0,0,0,8" CornerRadius="12" BorderThickness="1">
                   <Border.ContextMenu>
-                    <ContextMenu>
+                    <ContextMenu Style="{StaticResource TextMenu}">
                       <MenuItem Header="{loc:Text 'Hide this speaker'}" Click="HideReceiver_Click"/>
                     </ContextMenu>
                   </Border.ContextMenu>
@@ -155,7 +155,7 @@
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
-          <Button x:Name="ShowHidden" Click="ShowHidden_Click" Content="{Binding ShowHiddenLabel}" Visibility="{Binding HasHidden, Converter={StaticResource BoolVisibility}}" HorizontalAlignment="Left" Margin="4,0,0,8" Padding="0" Background="Transparent" BorderThickness="0" Cursor="Hand" Foreground="{DynamicResource AccentBrush}" FontSize="12"/>
+          <Button x:Name="ShowHidden" Click="ShowHidden_Click" Content="{Binding ShowHiddenLabel}" Visibility="{Binding HasHidden, Converter={StaticResource BoolVisibility}}" HorizontalAlignment="Left" Margin="4,0,0,8" Padding="0" MinHeight="0" Background="Transparent" BorderThickness="0" Cursor="Hand" Foreground="{DynamicResource AccentBrush}" FontSize="12"/>
         </StackPanel>
       </ScrollViewer>
       <StackPanel Grid.Row="3" Margin="2,4,2,0">

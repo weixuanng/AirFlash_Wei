@@ -20,6 +20,7 @@ internal sealed class VolumeKeys : IDisposable
     private readonly HookProcedure _procedure;
     private IntPtr _hook;
     private volatile bool _active;
+    private int _pending;
 
     public VolumeKeys(AppViewModel viewModel, Dispatcher dispatcher)
     {
@@ -29,16 +30,15 @@ internal sealed class VolumeKeys : IDisposable
     }
     private void OnPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
     {
-        if (args.PropertyName is nameof(AppViewModel.VolumeAvailable) or nameof(AppViewModel.VolumeKeysEnabled)) Refresh();
+        if (args.PropertyName is nameof(AppViewModel.VolumeWritable) or nameof(AppViewModel.VolumeKeysEnabled)) Refresh();
     }
     /// <summary>The hook exists only while there is a speaker volume to change.</summary>
     private void Refresh()
     {
-        _active = _viewModel.VolumeAvailable && _viewModel.VolumeKeysEnabled;
+        _active = _viewModel.VolumeWritable && _viewModel.VolumeKeysEnabled;
         if (_active && _hook == IntPtr.Zero)
         {
-            using var process = Process.GetCurrentProcess();
-            _hook = SetWindowsHookEx(KeyboardLowLevel, _procedure, GetModuleHandle(process.MainModule?.ModuleName), 0);
+            _hook = SetWindowsHookEx(KeyboardLowLevel, _procedure, GetModuleHandle(null), 0);
             AppPaths.Log($"Volume keys hook installed={_hook != IntPtr.Zero}");
         }
         else if (!_active && _hook != IntPtr.Zero) Remove();
@@ -56,8 +56,14 @@ internal sealed class VolumeKeys : IDisposable
             var key = Marshal.ReadInt32(lParam);
             if (key is VolumeUp or VolumeDown)
             {
-                var step = key == VolumeUp ? Step : -Step;
-                _dispatcher.BeginInvoke(() => { if (_viewModel.VolumeAvailable) _viewModel.DeviceVolume += step; });
+                // Presses are summed, so a burst that arrives before the UI thread
+                // runs is applied as one change and none is lost.
+                Interlocked.Add(ref _pending, key == VolumeUp ? Step : -Step);
+                _dispatcher.BeginInvoke(() =>
+                {
+                    var step = Interlocked.Exchange(ref _pending, 0);
+                    if (step != 0 && _viewModel.VolumeWritable) _viewModel.DeviceVolume += step;
+                });
                 return 1;
             }
         }
