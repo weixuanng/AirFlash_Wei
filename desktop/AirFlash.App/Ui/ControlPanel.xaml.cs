@@ -35,7 +35,6 @@ public partial class ControlPanel : Window
     private void VolumeSlider_Down(object sender, MouseButtonEventArgs e)
     {
         var slider = (System.Windows.Controls.Slider)sender;
-        slider.Focus();
         if (!slider.CaptureMouse()) return;
         SetVolumeFromPointer(slider, e);
         e.Handled = true;
@@ -53,7 +52,6 @@ public partial class ControlPanel : Window
         slider.ReleaseMouseCapture();
         e.Handled = true;
     }
-    private void VolumeSlider_Lost(object sender, MouseEventArgs e) { }
     private void VolumeSlider_Wheel(object sender, MouseWheelEventArgs e)
     {
         var slider = (System.Windows.Controls.Slider)sender;

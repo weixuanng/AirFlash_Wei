@@ -69,6 +69,8 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
         {
             if (value == StableConnection) return;
             _settings.LatencyMode = value ? "buffered" : "realtime";
+            // Without this the speaker's own minimum replaces the longer buffer.
+            _settings.ForceLatency = value;
             AppPaths.Log($"Setting stable_connection={value}");
             Notify(); VolumeChanged();
         }
@@ -236,6 +238,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
             var fixedDefaultsChanged = false;
             // Two buffers are offered: Real-time (120 ms) and Stable (500 ms).
             if (_settings.LatencyMode is not ("realtime" or "buffered")) { _settings.LatencyMode = "realtime"; fixedDefaultsChanged = true; }
+            if (_settings.ForceLatency != (_settings.LatencyMode == "buffered")) { _settings.ForceLatency = _settings.LatencyMode == "buffered"; fixedDefaultsChanged = true; }
             Notify(nameof(StableConnection)); Notify(nameof(DirectCapture));
             if (!_settings.StartAtLogin) { _settings.StartAtLogin = true; fixedDefaultsChanged = true; }
             if (_settings.Theme != "system") { _settings.Theme = "system"; fixedDefaultsChanged = true; }
@@ -602,7 +605,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
                     if (!(await Endpoints.RefreshAsync()).Any(e => e.Id == merged.CaptureEndpoint))
                         throw new InvalidOperationException(L.Get("The selected capture endpoint is unavailable. Select another."));
             }
-            if (merged.CaptureMode == "application" && !Applications.Supported) throw new InvalidOperationException(L.Get("Application capture requires Windows build 20348 or later. Use a virtual audio endpoint on this Windows version."));
+            if (merged.CaptureMode is "application" or "system" && !Applications.Supported) throw new InvalidOperationException(L.Get("Application capture requires Windows build 20348 or later. Use a virtual audio endpoint on this Windows version."));
             var changedAutostart = merged.StartAtLogin != before.StartAtLogin;
             using (UiPerformance.Measure("apply.persist"))
             {

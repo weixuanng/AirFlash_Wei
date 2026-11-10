@@ -10,11 +10,11 @@ Changes since Airplay 0.2.10.
 
 ## Stutter
 
-- **New option: Stable connection (adds delay).** A log from a ten-minute session showed 221 lost packets, 83 of which could not be re-sent in time with the 120 ms buffer. This option uses a 500 ms buffer so they can. Sound then runs about half a second behind video, so leave it off for video and turn it on for music.
+- **New option: Stable connection (adds delay).** A log from a ten-minute session showed 221 lost packets, 83 of which could not be re-sent in time with the 120 ms buffer. This option asks for a 500 ms buffer to give them time. Sound then runs about half a second behind video, so leave it off for video and turn it on for music.
 
 ## Capture
 
-- **New option: Capture apps directly.** Takes audio from apps before the PC speakers, so the PC can stay muted and a silent output device is no longer needed. It is off by default and untested on real hardware: turn it off again if the HomePod goes silent. Needs Windows build 20348 or later.
+- **New option: Capture apps directly.** Takes audio from apps before the PC speakers, which is meant to let the PC stay muted without a silent output device. Whether it does on your PC is untested, so it is off by default: turn it off again if the HomePod goes silent. Needs Windows build 20348 or later.
 
 None of this has been tested against a real HomePod.
 
