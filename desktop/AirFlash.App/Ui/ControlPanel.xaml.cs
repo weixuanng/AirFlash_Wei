@@ -36,7 +36,8 @@ public partial class ControlPanel : Window
         if (slider.Template?.FindName("PART_Fill", slider) is not FrameworkElement fill) return;
         var range = slider.Maximum - slider.Minimum;
         var fraction = range > 0 ? Math.Clamp((slider.Value - slider.Minimum) / range, 0, 1) : 0;
-        fill.Width = Math.Max(0, slider.ActualWidth * fraction);
+        // Never narrower than the rounded end, or a low level is clipped away.
+        fill.Width = fraction > 0 ? Math.Max(slider.ActualHeight, slider.ActualWidth * fraction) : 0;
     }
     private static void SetVolumeFromPointer(System.Windows.Controls.Slider slider, MouseEventArgs e)
     {

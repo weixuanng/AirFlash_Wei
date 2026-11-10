@@ -71,7 +71,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
         get => Math.Max(0, Array.IndexOf(DelayModes, _settings.LatencyMode));
         set
         {
-            if (value < 0 || value >= DelayModes.Length || value == DelayMode) return;
+            if (value < 0 || value >= DelayModes.Length || DelayModes[value] == _settings.LatencyMode) return;
             _settings.LatencyMode = DelayModes[value];
             // Without this the speaker's own minimum replaces the longer buffer.
             _settings.ForceLatency = DelayModes[value] == "buffered";
