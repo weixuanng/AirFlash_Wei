@@ -21,21 +21,31 @@ public sealed class SmtcNowPlayingSource(Action<string>? log = null) : INowPlayi
     /// <summary>Longest side of the artwork sent to the speaker, in pixels.</summary>
     private const uint ArtworkSize = 512;
     private static readonly string ArtworkDirectory = Path.Combine(Path.GetTempPath(), "Airplay");
-    private string _artworkTrack = "", _artworkPath = "";
+    private string _artworkSource = "", _artworkPath = "";
     private bool _artworkLogged;
     /// <summary>
-    /// The current thumbnail as a JPEG file. Read once per track, and again on later
-    /// polls while the player has not published one yet.
+    /// The current thumbnail as a JPEG file. The thumbnail is read on every poll,
+    /// because players change it a moment after the title and browser tabs change it
+    /// under the same title; it is decoded and encoded again only when its bytes change.
     /// </summary>
     private async Task<string> ArtworkAsync(GlobalSystemMediaTransportControlsSessionMediaProperties properties, CancellationToken cancellation)
     {
-        var track = $"{properties.Title}\n{properties.Artist}\n{properties.AlbumTitle}";
-        if (track == _artworkTrack && _artworkPath.Length > 0 && File.Exists(_artworkPath)) return _artworkPath;
-        if (track != _artworkTrack) { _artworkTrack = track; _artworkPath = ""; }
-        if (properties.Thumbnail is not { } thumbnail) return "";
+        if (properties.Thumbnail is not { } thumbnail) { _artworkSource = _artworkPath = ""; return ""; }
         try
         {
             using var source = await thumbnail.OpenReadAsync().AsTask(cancellation).ConfigureAwait(false);
+            if (source.Size is 0 or > 16 * 1024 * 1024) { _artworkSource = _artworkPath = ""; return ""; }
+            var raw = new byte[source.Size];
+            using (var reader = new DataReader(source.GetInputStreamAt(0)))
+            {
+                await reader.LoadAsync((uint)raw.Length).AsTask(cancellation).ConfigureAwait(false);
+                reader.ReadBytes(raw);
+            }
+            var identity = Convert.ToHexString(SHA256.HashData(raw));
+            // Same image as last poll, whether it could be converted or not.
+            if (identity == _artworkSource && (_artworkPath.Length == 0 || File.Exists(_artworkPath))) return _artworkPath;
+            _artworkSource = identity; _artworkPath = "";
+            source.Seek(0);
             var decoder = await BitmapDecoder.CreateAsync(source).AsTask(cancellation).ConfigureAwait(false);
             var longest = Math.Max(decoder.PixelWidth, decoder.PixelHeight);
             if (longest == 0) return "";
@@ -46,34 +56,42 @@ public sealed class SmtcNowPlayingSource(Action<string>? log = null) : INowPlayi
                 ScaledHeight = Math.Max(1, (uint)Math.Round(decoder.PixelHeight * scale)),
                 InterpolationMode = BitmapInterpolationMode.Fant
             };
-            // JPEG has no alpha: decode to opaque BGRA so a transparent logo does not turn black on black.
+            // Orientation is ignored so the pixel buffer keeps the scaled width and height.
             var pixels = await decoder.GetPixelDataAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Ignore, transform,
-                ExifOrientationMode.RespectExifOrientation, ColorManagementMode.ColorManageToSRgb).AsTask(cancellation).ConfigureAwait(false);
+                ExifOrientationMode.IgnoreExifOrientation, ColorManagementMode.ColorManageToSRgb).AsTask(cancellation).ConfigureAwait(false);
             using var output = new InMemoryRandomAccessStream();
             var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.JpegEncoderId, output).AsTask(cancellation).ConfigureAwait(false);
             encoder.SetPixelData(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Ignore, transform.ScaledWidth, transform.ScaledHeight, 96, 96, pixels.DetachPixelData());
             await encoder.FlushAsync().AsTask(cancellation).ConfigureAwait(false);
             var bytes = new byte[output.Size];
-            output.Seek(0);
-            using (var reader = new DataReader(output))
+            using (var reader = new DataReader(output.GetInputStreamAt(0)))
             {
                 await reader.LoadAsync((uint)bytes.Length).AsTask(cancellation).ConfigureAwait(false);
                 reader.ReadBytes(bytes);
             }
             Directory.CreateDirectory(ArtworkDirectory);
             var path = Path.Combine(ArtworkDirectory, $"artwork-{Convert.ToHexString(SHA256.HashData(bytes))[..16]}.jpg");
-            if (!File.Exists(path)) await File.WriteAllBytesAsync(path, bytes, cancellation).ConfigureAwait(false);
-            foreach (var old in Directory.EnumerateFiles(ArtworkDirectory, "artwork-*.jpg"))
-                if (!string.Equals(old, path, StringComparison.OrdinalIgnoreCase)) try { File.Delete(old); } catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
+            if (!File.Exists(path))
+            {
+                // Written under another name first, so the engine never reads half a file.
+                var partial = path + ".tmp";
+                await File.WriteAllBytesAsync(partial, bytes, cancellation).ConfigureAwait(false);
+                File.Move(partial, path, true);
+            }
+            // The engine may still be reading the previous image: only clear out old ones.
+            foreach (var old in Directory.EnumerateFiles(ArtworkDirectory, "artwork-*"))
+                if (!string.Equals(old, path, StringComparison.OrdinalIgnoreCase) && File.GetLastWriteTimeUtc(old) < DateTime.UtcNow.AddHours(-1))
+                    try { File.Delete(old); } catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
             if (!_artworkLogged) { _artworkLogged = true; log?.Invoke($"Now Playing artwork: {transform.ScaledWidth}x{transform.ScaledHeight}; {bytes.Length} bytes"); }
             return _artworkPath = path;
         }
         catch (OperationCanceledException) { throw; }
-        // Artwork is decoration: a thumbnail that cannot be read or encoded is skipped.
+        // Artwork is decoration: a thumbnail that cannot be read or encoded is skipped,
+        // and not tried again until the player offers a different one.
         catch (Exception error)
         {
             if (!_artworkLogged) { _artworkLogged = true; log?.Invoke($"Now Playing artwork unavailable: {error.Message}"); }
-            return "";
+            return _artworkPath = "";
         }
     }
     public async Task ExecuteAsync(RemoteCommand command, CancellationToken cancellation)

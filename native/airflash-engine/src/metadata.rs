@@ -262,6 +262,10 @@ impl Worker {
                             } else {
                                 tags_sent[index] = Some(tags);
                                 tags_updated = true;
+                                // New tags replace the receiver's whole Now Playing
+                                // item, so the artwork follows them even when the
+                                // next track of an album has the same image.
+                                artwork_sent[index] = None;
                             }
                         }
                         if let Some(artwork) = now.artwork.as_ref().filter(|artwork| {
