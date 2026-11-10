@@ -51,6 +51,9 @@ pub struct NowPlaying {
     #[serde(skip)]
     pub artwork: Option<Arc<Vec<u8>>>,
 }
+/// The control connection's usual patience, and what an artwork request gets.
+const CONTROL_TIMEOUT: Duration = Duration::from_secs(4);
+const ARTWORK_TIMEOUT: Duration = Duration::from_secs(15);
 /// Larger than any thumbnail the desktop produces; a guard, not a target.
 pub const ARTWORK_LIMIT: u64 = 1024 * 1024;
 fn playing_default() -> bool {
@@ -271,12 +274,17 @@ impl Worker {
                         if let Some(artwork) = now.artwork.as_ref().filter(|artwork| {
                             artwork_enabled[index] && artwork_sent[index].as_ref() != Some(*artwork)
                         }) {
-                            if let Err(error) = connection.request(
+                            // An image is a hundred times the size of any other
+                            // request on this connection; give it the time.
+                            let _ = connection.set_timeout(ARTWORK_TIMEOUT);
+                            let sent = connection.request(
                                 "SET_PARAMETER",
                                 uri,
                                 &[("Content-Type", "image/jpeg".into()), stamp],
                                 artwork,
-                            ) {
+                            );
+                            let _ = connection.set_timeout(CONTROL_TIMEOUT);
+                            if let Err(error) = sent {
                                 errors.push(format!("{host}: artwork: {error:#}"));
                                 artwork_enabled[index] = false;
                             } else {
@@ -493,7 +501,14 @@ mod tests {
             }
         });
         let control = Control::default();
-        control.set(1, sample());
+        let jpeg = Arc::new(vec![0xff, 0xd8, 0xff, 0xe0, 9, 9, 0xff, 0xd9]);
+        let with_art = |position_ms: u64, title: &str| NowPlaying {
+            title: title.into(),
+            position_ms,
+            artwork: Some(jpeg.clone()),
+            ..sample()
+        };
+        control.set(1, with_art(42_000, "Song"));
         let connection = Connection::connect(addr, Cancellation::default()).unwrap();
         let peers = vec![(
             "127.0.0.1".to_string(),
@@ -531,14 +546,44 @@ mod tests {
                 .contains("content-type: application/x-dmap-tagged")
         );
         assert_eq!(&second.1[..4], b"mlit");
-        // Same track, new position: progress is re-sent, tags are not.
-        let mut moved = sample();
-        moved.position_ms += 2_000;
-        control.set(2, moved.clone());
+        // The artwork follows the tags, byte for byte.
+        let art = received
+            .recv_timeout(Duration::from_secs(2))
+            .expect("artwork payload");
+        assert!(
+            art.0
+                .to_ascii_lowercase()
+                .contains("content-type: image/jpeg")
+        );
+        assert_eq!(art.1, *jpeg);
+        // Same track, new position: progress is re-sent, tags and artwork are not.
+        control.set(2, with_art(44_000, "Song"));
         let third = received
             .recv_timeout(Duration::from_secs(3))
             .expect("progress after a position change");
         assert!(String::from_utf8_lossy(&third.1).starts_with("progress: "));
+        // Next track of the same album: new tags, and the same image again.
+        control.set(3, with_art(0, "Next song"));
+        let kinds: Vec<String> = (0..3)
+            .map(|_| {
+                let request = received
+                    .recv_timeout(Duration::from_secs(3))
+                    .expect("progress, tags and artwork for the next track");
+                request
+                    .0
+                    .lines()
+                    .find_map(|line| {
+                        line.to_ascii_lowercase()
+                            .strip_prefix("content-type:")
+                            .map(|v| v.trim().to_string())
+                    })
+                    .unwrap_or_default()
+            })
+            .collect();
+        assert_eq!(
+            kinds,
+            ["text/parameters", "application/x-dmap-tagged", "image/jpeg"]
+        );
         drop(worker);
         drop(received);
         let _ = server.join();

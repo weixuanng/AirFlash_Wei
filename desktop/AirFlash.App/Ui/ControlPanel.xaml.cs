@@ -25,6 +25,18 @@ public partial class ControlPanel : Window
         var slider = (System.Windows.Controls.Slider)sender;
         var radius = slider.ActualHeight / 2;
         slider.Clip = new System.Windows.Media.RectangleGeometry(new Rect(0, 0, slider.ActualWidth, slider.ActualHeight), radius, radius);
+        FillVolume(slider);
+    }
+    private void VolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => FillVolume((System.Windows.Controls.Slider)sender);
+    private void VolumeSlider_Loaded(object sender, RoutedEventArgs e) => FillVolume((System.Windows.Controls.Slider)sender);
+    /// <summary>The filled part of the pill, as wide as the level.</summary>
+    internal static void FillVolume(System.Windows.Controls.Slider slider)
+    {
+        slider.ApplyTemplate();
+        if (slider.Template?.FindName("PART_Fill", slider) is not FrameworkElement fill) return;
+        var range = slider.Maximum - slider.Minimum;
+        var fraction = range > 0 ? Math.Clamp((slider.Value - slider.Minimum) / range, 0, 1) : 0;
+        fill.Width = Math.Max(0, slider.ActualWidth * fraction);
     }
     private static void SetVolumeFromPointer(System.Windows.Controls.Slider slider, MouseEventArgs e)
     {

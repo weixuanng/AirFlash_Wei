@@ -1,23 +1,24 @@
-# Airplay 0.2.11
+# Airplay 0.2.12
 
-Changes since Airplay 0.2.10.
+Changes since Airplay 0.2.11.
 
-## Volume
+## Volume slider
 
-- **The volume now follows the slider while you drag it.** Before, the HomePod only changed once you stopped moving. Changes now go out as you drag, a few times a second.
-- **The slider is a thick rounded bar that fills as you drag**, in the style of iOS Control Centre. Click or drag anywhere on it, or use the mouse wheel or arrow keys.
-- The slider no longer disappears for a moment when one volume reading fails.
+- **The slider now shows the level.** In 0.2.11 the bar never filled, so the level could only be read from the number. The filled part is now drawn in blue on a clearer grey bar.
 
-## Stutter
+## Delay
 
-- **New option: Stable connection (adds delay).** A log from a ten-minute session showed 221 lost packets, 83 of which could not be re-sent in time with the 120 ms buffer. This option asks for a 500 ms buffer to give them time. Sound then runs about half a second behind video, so leave it off for video and turn it on for music.
+- **The "Stable connection" tick box is now a Delay choice with three settings:**
+  - **Lowest (adapts):** starts with a 50 ms buffer, less than half of before, and steps it up (to at most 200 ms) only when the stream has trouble. Use this for video.
+  - **Balanced:** the fixed 120 ms buffer earlier versions used.
+  - **Most stable:** the 500 ms buffer, for music on poor Wi-Fi.
+- If you had "Stable connection" ticked, you are now on Most stable. Pick Lowest to try the shorter delay.
+- A delay remains on every setting. Lowest has not been tested on a real HomePod, and a step up restarts the stream with a short gap.
 
-## Capture
+## Artwork
 
-- **New option: Capture apps directly.** Takes audio from apps before the PC speakers, which is meant to let the PC stay muted without a silent output device. Whether it does on your PC is untested, so it is off by default: turn it off again if the HomePod goes silent. Needs Windows build 20348 or later.
+- Sending artwork gets 15 seconds instead of 4 before it is given up on, so a slow moment on Wi-Fi no longer switches artwork off for the session.
 
-None of this has been tested against a real HomePod.
-
-Run **Airplay-0.2.11.msi** to install or upgrade. The portable **Airplay.exe** still works but does not get the firewall rule. Verify downloads with **SHA256SUMS.txt**. Binaries are unsigned, so Windows SmartScreen may ask you to confirm the first run.
+Run **Airplay-0.2.12.msi** to install or upgrade. The portable **Airplay.exe** still works but does not get the firewall rule. Verify downloads with **SHA256SUMS.txt**. Binaries are unsigned, so Windows SmartScreen may ask you to confirm the first run.
 
 Logs are in `%APPDATA%\Airplay\logs`.

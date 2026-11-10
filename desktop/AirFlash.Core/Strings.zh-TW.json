@@ -375,5 +375,10 @@
   "Stable connection (adds delay)": "穩定連線（增加延遲）",
   "Uses a longer buffer so brief Wi-Fi losses do not stutter. Sound runs about half a second behind video.": "使用較長的緩衝，短暫的 Wi-Fi 遺失不會造成卡頓。聲音會比畫面晚約半秒。",
   "Capture apps directly": "直接擷取應用程式音訊",
-  "Takes audio from apps before the PC speakers, so the PC can stay muted. Turn off if the speaker goes silent.": "在電腦喇叭之前擷取應用程式音訊，電腦可以保持靜音。如果喇叭沒有聲音，請關閉此項。"
+  "Takes audio from apps before the PC speakers, so the PC can stay muted. Turn off if the speaker goes silent.": "在電腦喇叭之前擷取應用程式音訊，電腦可以保持靜音。如果喇叭沒有聲音，請關閉此項。",
+  "Delay": "延遲",
+  "Lowest (adapts)": "最低（自動調整）",
+  "Balanced": "均衡",
+  "Most stable": "最穩定",
+  "Lowest keeps sound closest to video and steps the delay up only if the stream has trouble. Most stable gives lost packets time to be sent again.": "「最低」讓聲音最接近畫面，僅在串流出現問題時才逐步增加延遲。「最穩定」讓遺失的封包有時間重新傳送。"
 }

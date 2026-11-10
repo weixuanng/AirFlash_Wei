@@ -304,36 +304,11 @@
         <Setter Property="Template">
           <Setter.Value>
             <ControlTemplate TargetType="Slider">
-              <Grid Background="{DynamicResource LineBrush}">
-                <Track x:Name="PART_Track">
-                  <Track.DecreaseRepeatButton>
-                    <RepeatButton Focusable="False" IsTabStop="False" IsHitTestVisible="False">
-                      <RepeatButton.Template>
-                        <ControlTemplate TargetType="RepeatButton">
-                          <Border Background="{DynamicResource AccentBrush}"/>
-                        </ControlTemplate>
-                      </RepeatButton.Template>
-                    </RepeatButton>
-                  </Track.DecreaseRepeatButton>
-                  <Track.IncreaseRepeatButton>
-                    <RepeatButton Focusable="False" IsTabStop="False" IsHitTestVisible="False">
-                      <RepeatButton.Template>
-                        <ControlTemplate TargetType="RepeatButton">
-                          <Border Background="Transparent"/>
-                        </ControlTemplate>
-                      </RepeatButton.Template>
-                    </RepeatButton>
-                  </Track.IncreaseRepeatButton>
-                  <Track.Thumb>
-                    <Thumb Width="0" IsHitTestVisible="False" Focusable="False">
-                      <Thumb.Template>
-                        <ControlTemplate TargetType="Thumb">
-                          <Border/>
-                        </ControlTemplate>
-                      </Thumb.Template>
-                    </Thumb>
-                  </Track.Thumb>
-                </Track>
+              <Grid>
+                <!-- A mid grey that stands off the panel in both themes. -->
+                <Border Background="{DynamicResource MutedBrush}" Opacity="0.38"/>
+                <!-- The panel sets this width from the value; no Track is involved. -->
+                <Border x:Name="PART_Fill" HorizontalAlignment="Left" Width="0" Background="{DynamicResource AccentBrush}"/>
                 <Border x:Name="FocusRing" BorderBrush="{DynamicResource TextBrush}" BorderThickness="2" CornerRadius="13" Visibility="Collapsed"/>
               </Grid>
               <ControlTemplate.Triggers>

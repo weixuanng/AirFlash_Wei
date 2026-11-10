@@ -60,18 +60,22 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
         }
     }
     public string DeviceVolumeText => $"{(int)DeviceVolume}";
-    /// <summary>A 500 ms buffer in place of 120 ms: lost packets have time to be sent
-    /// again, at the cost of more delay behind video.</summary>
-    public bool StableConnection
+    /// <summary>
+    /// How much audio the speaker holds, as an index into <see cref="DelayModes"/>:
+    /// adaptive (starts at 50 ms and steps up only when the stream has trouble),
+    /// fixed 120 ms, or 500 ms so lost packets have time to be sent again.
+    /// </summary>
+    private static readonly string[] DelayModes = [LatencyPolicy.Mode, "realtime", "buffered"];
+    public int DelayMode
     {
-        get => _settings.LatencyMode == "buffered";
+        get => Math.Max(0, Array.IndexOf(DelayModes, _settings.LatencyMode));
         set
         {
-            if (value == StableConnection) return;
-            _settings.LatencyMode = value ? "buffered" : "realtime";
+            if (value < 0 || value >= DelayModes.Length || value == DelayMode) return;
+            _settings.LatencyMode = DelayModes[value];
             // Without this the speaker's own minimum replaces the longer buffer.
-            _settings.ForceLatency = value;
-            AppPaths.Log($"Setting stable_connection={value}");
+            _settings.ForceLatency = DelayModes[value] == "buffered";
+            AppPaths.Log($"Setting delay_mode={DelayModes[value]}");
             Notify(); VolumeChanged();
         }
     }
@@ -237,9 +241,9 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
             // stale configuration value must never reach the engine or autostart.
             var fixedDefaultsChanged = false;
             // Two buffers are offered: Real-time (120 ms) and Stable (500 ms).
-            if (_settings.LatencyMode is not ("realtime" or "buffered")) { _settings.LatencyMode = "realtime"; fixedDefaultsChanged = true; }
+            if (!DelayModes.Contains(_settings.LatencyMode)) { _settings.LatencyMode = "realtime"; fixedDefaultsChanged = true; }
             if (_settings.ForceLatency != (_settings.LatencyMode == "buffered")) { _settings.ForceLatency = _settings.LatencyMode == "buffered"; fixedDefaultsChanged = true; }
-            Notify(nameof(StableConnection)); Notify(nameof(DirectCapture));
+            Notify(nameof(DelayMode)); Notify(nameof(DirectCapture));
             if (!_settings.StartAtLogin) { _settings.StartAtLogin = true; fixedDefaultsChanged = true; }
             if (_settings.Theme != "system") { _settings.Theme = "system"; fixedDefaultsChanged = true; }
             foreach (var options in _settings.Receivers.Values)
