@@ -78,6 +78,15 @@ public sealed class ThemeService : IDisposable
         SetBrush("CaptionTextBrush", palette.CaptionText);
         SetBrush("SuccessBrush", palette.Success);
         SetBrush("WarningBrush", palette.Warning);
+        // Glass: the panel lets a little of the desktop through, lit from the top
+        // edge, and the cards on it are thin frosted layers, not solid tiles.
+        var light = palette.IsDark ? Colors.White : Colors.White;
+        var body = palette.Canvas;
+        SetGradient("GlassBrush", (WithAlpha(Lift(body, palette.IsDark ? 22 : 0), 0xD9), 0), (WithAlpha(body, 0xD9), 0.45), (WithAlpha(body, 0xE6), 1));
+        SetGradient("GlassEdgeBrush", (WithAlpha(light, palette.IsDark ? (byte)0x66 : (byte)0xF2), 0), (WithAlpha(light, palette.IsDark ? (byte)0x1A : (byte)0x99), 0.5), (WithAlpha(light, palette.IsDark ? (byte)0x33 : (byte)0xCC), 1));
+        SetGradient("GlassCardBrush", (WithAlpha(light, palette.IsDark ? (byte)0x1F : (byte)0xB8), 0), (WithAlpha(light, palette.IsDark ? (byte)0x0F : (byte)0x8C), 1));
+        SetGradient("GlassActiveBrush", (WithAlpha(palette.Accent, palette.IsDark ? (byte)0x57 : (byte)0x38), 0), (WithAlpha(palette.Accent, palette.IsDark ? (byte)0x2E : (byte)0x1F), 1));
+        SetGradient("GlassSheenBrush", (WithAlpha(light, palette.IsDark ? (byte)0x24 : (byte)0x80), 0), (WithAlpha(light, 0), 1));
 
         ApplyFluentResources(palette);
         ThemeChanged?.Invoke(palette);
@@ -165,5 +174,14 @@ public sealed class ThemeService : IDisposable
         Application.Current.Resources[key] = brush;
     }
 
+    private static Color Lift(Color color, int amount) => Color.FromArgb(color.A, (byte)Math.Min(255, color.R + amount), (byte)Math.Min(255, color.G + amount), (byte)Math.Min(255, color.B + amount));
+    /// <summary>A top-to-bottom gradient resource.</summary>
+    private static void SetGradient(string key, params (Color Color, double Offset)[] stops)
+    {
+        var brush = new LinearGradientBrush { StartPoint = new(0, 0), EndPoint = new(0, 1) };
+        foreach (var (color, offset) in stops) brush.GradientStops.Add(new(color, offset));
+        brush.Freeze();
+        Application.Current.Resources[key] = brush;
+    }
     private static Color WithAlpha(Color color, byte alpha) => Color.FromArgb(alpha, color.R, color.G, color.B);
 }

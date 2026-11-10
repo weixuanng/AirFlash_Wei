@@ -57,7 +57,7 @@
       </Setter>
     </Style>
   </Window.Resources>
-  <Border x:Name="Card" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="14" Padding="14" Background="{DynamicResource CanvasBrush}">
+  <Border x:Name="Card" BorderBrush="{DynamicResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="18" Padding="14" Background="{DynamicResource GlassBrush}">
     <Grid>
       <Grid.RowDefinitions>
         <RowDefinition Height="Auto"/>
@@ -65,6 +65,7 @@
         <RowDefinition Height="*"/>
         <RowDefinition Height="Auto"/>
       </Grid.RowDefinitions>
+      <Border Grid.RowSpan="9" Margin="-14,-14,-14,0" Height="120" VerticalAlignment="Top" CornerRadius="17,17,0,0" Background="{DynamicResource GlassSheenBrush}" IsHitTestVisible="False"/>
       <Grid Margin="2,0,0,12">
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="*"/>
@@ -108,7 +109,7 @@
           <ItemsControl ItemsSource="{Binding Receivers}" loc:Motion.Stagger="True">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Border Padding="10" Margin="0,0,0,8" CornerRadius="12" BorderThickness="1">
+                <Border Padding="10" Margin="0,0,0,8" CornerRadius="14" BorderThickness="1">
                   <Border.ContextMenu>
                     <ContextMenu Style="{StaticResource TextMenu}">
                       <MenuItem Header="{loc:Text 'Hide this speaker'}" Click="HideReceiver_Click"/>
@@ -116,12 +117,12 @@
                   </Border.ContextMenu>
                   <Border.Style>
                     <Style TargetType="Border">
-                      <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
-                      <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}"/>
+                      <Setter Property="Background" Value="{DynamicResource GlassCardBrush}"/>
+                      <Setter Property="BorderBrush" Value="{DynamicResource GlassEdgeBrush}"/>
                       <Style.Triggers>
                         <DataTrigger Binding="{Binding Active}" Value="True">
                           <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-                          <Setter Property="Background" Value="{DynamicResource TintBrush}"/>
+                          <Setter Property="Background" Value="{DynamicResource GlassActiveBrush}"/>
                         </DataTrigger>
                       </Style.Triggers>
                     </Style>
@@ -141,7 +142,11 @@
                     </Border>
                     <StackPanel Grid.Column="1" Margin="0,0,8,0" VerticalAlignment="Center">
                       <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
-                      <TextBlock Text="{Binding StateText, NotifyOnTargetUpdated=True}" Style="{StaticResource Hint}" Margin="0,2,0,0" loc:Motion.FadeOnUpdate="True"/>
+                      <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                        <!-- The one sign of a live connection: a green dot on the speaker in use. -->
+                        <Ellipse x:Name="ConnectedDot" Width="7" Height="7" Margin="0,0,6,4" VerticalAlignment="Center" Fill="{DynamicResource SuccessBrush}" Visibility="{Binding IsStreaming, Converter={StaticResource BoolVisibility}}"/>
+                        <TextBlock Text="{Binding StateText, NotifyOnTargetUpdated=True}" Style="{StaticResource Hint}" loc:Motion.FadeOnUpdate="True"/>
+                      </StackPanel>
                     </StackPanel>
                     <!-- Now-playing level bars; they only animate while shown and streaming. -->
                     <StackPanel Grid.Column="2" Orientation="Horizontal" Height="14" VerticalAlignment="Center" Margin="0,0,4,0" IsHitTestVisible="False" loc:Motion.Playing="True" Visibility="{Binding IsStreaming, Converter={StaticResource BoolVisibility}}">
@@ -212,6 +217,9 @@
           <CheckBox x:Name="VolumeKeysOption" IsChecked="{Binding VolumeKeysEnabled, Mode=TwoWay}" Content="{loc:Text 'Volume keys control the speaker'}" ToolTip="{loc:Text 'While connected, the keyboard volume keys change the speaker instead of this PC.'}" Margin="0,0,0,6"/>
           <CheckBox x:Name="DirectCaptureOption" IsChecked="{Binding DirectCapture, Mode=TwoWay}" IsEnabled="{Binding DirectCaptureAvailable}" Content="{loc:Text 'Capture apps directly'}" ToolTip="{loc:Text 'Takes audio from apps before the PC speakers, so the PC can stay muted. Turn off if the speaker goes silent.'}"/>
         </StackPanel>
+        <!-- Shown while there is something to say: connecting, waiting, an error.
+             A live connection is marked on the speaker's own row instead. -->
+        <StackPanel x:Name="StatusBlock" Visibility="{Binding ShowStatus, Converter={StaticResource BoolVisibility}}">
         <DockPanel>
           <Ellipse Width="8" Height="8" Margin="0,0,7,0" VerticalAlignment="Center" loc:Motion.Breathe="{Binding StatusBusy}">
             <Ellipse.Style>
@@ -229,6 +237,7 @@
           <TextBlock Text="{Binding StatusTitle, NotifyOnTargetUpdated=True}" FontWeight="SemiBold" FontSize="12" loc:Motion.FadeOnUpdate="True"/>
         </DockPanel>
         <TextBlock x:Name="StatusDetailText" Text="{Binding StatusDetail}" Style="{StaticResource Hint}" Margin="15,4,0,0" MaxHeight="84" TextTrimming="CharacterEllipsis" ToolTip="{Binding StatusDetail}" Visibility="{Binding StatusDetail, Converter={StaticResource NonEmpty}}"/>
+        </StackPanel>
         <TextBlock x:Name="PairingActionHint" Text="{Binding ActionHint, NotifyOnTargetUpdated=True}" Style="{StaticResource Hint}" Margin="15,2,0,0" TextWrapping="Wrap" Visibility="{Binding ActionHint, Converter={StaticResource NonEmpty}}" AutomationProperties.Name="{Binding ActionHint}" AutomationProperties.LiveSetting="Polite" TargetUpdated="OnActionHintUpdated"/>
         <Button Content="{loc:Text 'Reconnect'}" Command="{Binding ReconnectCommand}" Visibility="{Binding CanReconnect, Converter={StaticResource BoolVisibility}}" HorizontalAlignment="Left" Margin="15,8,0,0" Padding="12,4" AutomationProperties.Name="{loc:Text 'Reconnect'}"/>
         <Expander Header="{loc:Text 'View error details'}" Visibility="{Binding ErrorDetails, Converter={StaticResource NonEmpty}}" Margin="0,8,0,0">

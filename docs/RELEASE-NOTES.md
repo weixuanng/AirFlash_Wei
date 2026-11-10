@@ -23,6 +23,11 @@ Changes since Airplay 0.2.11.
 - With "Capture apps directly" on, changing the Windows output device now restarts the stream so the new device is muted as well.
 - Airplay already connects to the last speaker when Windows starts, so nothing changed there.
 
+## Look
+
+- **Glass-style panel.** The panel and speaker rows are translucent with a light edge. It is a tint, not a blur of what is behind the window.
+- **A green dot on the speaker in use** replaces the status lines while playing. The status lines still appear while connecting, waiting or on an error.
+
 ## Artwork
 
 - Sending artwork gets up to 15 seconds instead of 4 before it is given up on, so a slow moment on Wi-Fi no longer switches artwork off for the session.
