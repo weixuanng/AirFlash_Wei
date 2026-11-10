@@ -184,7 +184,7 @@ public sealed class SettingsStore : ISettingsStore
                 && mode.Equals(LatencyPolicy.Mode, StringComparison.OrdinalIgnoreCase))
                 owner[key] = "realtime";
         }
-        // The global mode may be adaptive again: it is the panel's "Lowest" delay.
+        // The global mode may be adaptive again: it is the panel's "Auto" delay.
         // A per-receiver adaptive override has no control and stays retired.
         if (json["receivers"] is JsonObject receivers)
             foreach (var receiver in receivers.Select(pair => pair.Value).OfType<JsonObject>()) Normalize(receiver);

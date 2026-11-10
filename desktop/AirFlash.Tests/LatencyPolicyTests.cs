@@ -8,6 +8,17 @@ public sealed class LatencyPolicyTests
     private static Receiver Pair() => new("stereo:a", "Pair", "10.0.0.5") { Members = [new("a", "L", "10.0.0.5") { IsLeader = true }, new("b", "R", "10.0.0.6")] };
 
     [Fact]
+    public void HomePod_on_its_own_clock_never_starts_below_the_lead_it_plays()
+    {
+        var plan = LatencyPolicy.For(new Receiver("a", "a", "127.0.0.1") { FollowReceiverClock = true });
+        Assert.Equal(120, plan.Initial);
+        Assert.Equal(120, plan.Floor);
+        Assert.Equal(160, LatencyPolicy.Next(120, plan, true));
+        Assert.Equal(120, LatencyPolicy.Next(120, plan, false));
+        // NTP timing keeps its own, higher ladder.
+        Assert.Equal(200, LatencyPolicy.For(new Receiver("a", "a", "127.0.0.1") { FollowReceiverClock = true }, ptp: false).Initial);
+    }
+    [Fact]
     public void Solo_homepod_alac_starts_at_the_validated_floor()
     {
         var plan = LatencyPolicy.For(Solo());
