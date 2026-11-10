@@ -87,6 +87,10 @@ pub struct ParsedEvent {
     pub volume: Option<f64>,
     /// Key that supplied the command, for diagnostics.
     pub source: Option<&'static str>,
+    /// For a message that carried nothing understood: its key names (and the
+    /// `type` string, when there is one). Names only, never values, so the log
+    /// can show what a receiver's buttons send without recording content.
+    pub unknown: Option<String>,
 }
 
 /// Parse an event body. Unparseable payloads return an empty result rather than an
@@ -125,7 +129,26 @@ fn parse_value(value: &Value) -> ParsedEvent {
     if let Some(volume) = dict.get("volume").and_then(normalised_volume) {
         parsed.volume = Some(volume);
     }
+    if parsed.commands.is_empty() && parsed.volume.is_none() && !dict.is_empty() {
+        parsed.unknown = Some(describe(dict));
+    }
     parsed
+}
+
+fn describe(dict: &plist::Dictionary) -> String {
+    let mut keys: Vec<&str> = dict.keys().map(String::as_str).collect();
+    keys.sort_unstable();
+    let mut text: String = keys
+        .iter()
+        .take(12)
+        .map(|key| key.chars().take(32).collect::<String>())
+        .collect::<Vec<_>>()
+        .join(",");
+    if let Some(kind) = dict.get("type").and_then(Value::as_string) {
+        text.push_str(";type=");
+        text.extend(kind.chars().take(48));
+    }
+    text
 }
 
 fn commands_of(value: &Value) -> Vec<RemoteCommand> {
@@ -283,6 +306,22 @@ mod tests {
             let volume = parsed.volume.expect("volume");
             assert!((volume - expected).abs() < 0.01, "{volume} vs {expected}");
         }
+    }
+
+    #[test]
+    fn a_message_without_a_command_reports_its_key_names_only() {
+        let mut dict = Dictionary::new();
+        dict.insert("type".into(), Value::String("updateInfo".into()));
+        dict.insert("value".into(), Value::String("secret".into()));
+        let parsed = parse(&binary(dict));
+        assert!(parsed.commands.is_empty());
+        assert_eq!(
+            parsed.unknown.as_deref(),
+            Some("type,value;type=updateInfo")
+        );
+        let mut dict = Dictionary::new();
+        dict.insert("mrCommand".into(), Value::Integer(2u64.into()));
+        assert_eq!(parse(&binary(dict)).unknown, None);
     }
 
     #[test]

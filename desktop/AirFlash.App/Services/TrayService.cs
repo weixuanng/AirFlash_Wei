@@ -13,6 +13,7 @@ public sealed class TrayService : IDisposable
     private readonly HwndSource _source;
     private AppIconService.NativeIcon _icon;
     private readonly VolumeKeys _volumeKeys;
+    private readonly PowerWatch _power;
     private int _iconPixels;
     private bool _refreshQueued;
     private readonly TrayRegistration _registration;
@@ -43,6 +44,11 @@ public sealed class TrayService : IDisposable
         UpdateRetry(_registration.TryRegister());
         viewModel.PropertyChanged += OnPropertyChanged;
         _volumeKeys = new(viewModel, panel.Dispatcher);
+        var dispatcher = panel.Dispatcher;
+        // Windows holds sleep back until the first callback returns, so it waits (briefly) for the stop.
+        _power = new(
+            () => { try { if (!dispatcher.InvokeAsync(viewModel.SuspendAsync).Task.Unwrap().Wait(TimeSpan.FromSeconds(2))) AppPaths.Log("Sleep: stop still running after 2 s"); } catch (Exception error) { AppPaths.Log($"Sleep: stop did not finish: {error.GetBaseException().Message}"); } },
+            () => dispatcher.BeginInvoke(viewModel.Resume));
     }
     private static void Log(string message) => AppPaths.Log($"Tray path=\"{Environment.ProcessPath}\" {message}");
     private static AppIconService.NativeIcon LoadTrayIcon(int pixels)
@@ -195,6 +201,7 @@ public sealed class TrayService : IDisposable
         _retry.Stop(); _retry.Tick -= Retry;
         _viewModel.PropertyChanged -= OnPropertyChanged;
         _volumeKeys.Dispose();
+        _power.Dispose();
         _registration.Dispose(); _source.Dispose();
         _icon.Dispose();
     }

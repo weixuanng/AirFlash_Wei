@@ -556,9 +556,65 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
         finally { _settingsGate.Release(); }
         await FlushVolumeAsync();
     }
+    // ---- Sleep. The speaker is let go before the PC sleeps and taken back on wake,
+    // so nothing else in the house finds it held by a sleeping laptop.
+    private string? _wakeTarget;
+    private bool _asleep, _wakeBusy;
+    private int _wakeTries;
+    private DispatcherTimer? _wakeTimer;
+    private const int WakeTries = 30;
+    /// <summary>Called on the UI thread just before the PC sleeps.</summary>
+    public Task SuspendAsync()
+    {
+        if (_closing) return Task.CompletedTask;
+        _wakeTimer?.Stop();
+        // Remember the speaker only when one is really in use: not while a stop the
+        // user asked for is still finishing. A speaker still waiting to be taken
+        // back from an earlier sleep stays remembered.
+        var held = SessionHeld && !IsStopping;
+        if (!_asleep && held && _snapshot.Receiver?.Id is { } id) _wakeTarget = id;
+        _asleep = true;
+        AppPaths.Log($"Sleep: releasing speaker={held}; reconnect on wake={_wakeTarget is not null}");
+        return held ? StopAsync(userInitiated: false) : Task.CompletedTask;
+    }
+    /// <summary>Called on the UI thread once the PC is awake again.</summary>
+    public void Resume()
+    {
+        if (!_asleep) return;
+        _asleep = false;
+        AppPaths.Log($"Wake: reconnecting={_wakeTarget is not null}");
+        if (_closing) return;
+        if (_wakeTarget is null) { ScheduleAutoConnect(); return; }
+        _wakeTries = 0;
+        // Wi-Fi and discovery need a moment after wake, so the speaker is retried for a while.
+        _wakeTimer ??= new(TimeSpan.FromSeconds(3), DispatcherPriority.Background, async (_, _) => { try { await WakeTickAsync(); } catch (Exception error) { ShowError(error); } }, _dispatcher);
+        _wakeTimer.Start();
+    }
+    private async Task WakeTickAsync()
+    {
+        if (_closing || _asleep || _wakeTarget is not { } target) { _wakeTimer?.Stop(); return; }
+        // Done once the speaker is held again (by this retry or by the user), or
+        // when the tries run out; ordinary auto-connect takes over from there.
+        if (SessionHeld || ++_wakeTries > WakeTries)
+        {
+            AppPaths.Log($"Wake: reconnect finished held={SessionHeld}; tries={_wakeTries}");
+            _wakeTimer?.Stop(); _wakeTarget = null;
+            if (!SessionHeld) ScheduleAutoConnect();
+            return;
+        }
+        if (IsStopping || Session.NeedsCleanup || !EngineReady) return;
+        if (Receivers.FirstOrDefault(r => r.Receiver.Id == target && r.CanPlay) is not { } row) return;
+        // The first tries can fail while Wi-Fi is still coming back; the target is
+        // kept so the next tick tries again.
+        if (_wakeBusy) return; // a slow start must not be restarted by the next tick
+        _wakeBusy = true;
+        try { await ToggleAsync(row.Receiver, SessionStartIntent.Automatic); }
+        catch (Exception error) { AppPaths.Log($"Wake: reconnect try {_wakeTries} failed: {error.Message}"); }
+        finally { _wakeBusy = false; }
+    }
     public Task StopAsync(bool userInitiated = true)
     {
-        if (userInitiated) _autoSuppressed = true;
+        if (userInitiated) { _autoSuppressed = true; _wakeTarget = null; }
         if (_stopTask is not null) return _stopTask;
         ++_playIntent;
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -598,7 +654,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
     internal async Task TryAutoConnectAsync()
     {
         // While yielding, the session itself resumes once the receiver is free.
-        if (_closing || IsStopping || Session.NeedsCleanup || Session.RequiresManualReconnect || Session.IsYielding || !EngineReady || _autoSuppressed || Session.Snapshot.IsActive) return;
+        if (_closing || _asleep || _wakeTarget is not null || IsStopping || Session.NeedsCleanup || Session.RequiresManualReconnect || Session.IsYielding || !EngineReady || _autoSuppressed || Session.Snapshot.IsActive) return;
         // An explicit per-receiver choice wins; otherwise the last-used receiver
         // (AutoConnectLastReceiver) or every receiver (AutoConnectOnDiscover).
         var eligible = AllReceivers.Where(r => r.Online && r.Complete && !_settings.ReadOptions(r.Id).Hidden
@@ -719,7 +775,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
     public ValueTask DisposeAsync() => new(_disposeTask ??= DisposeCoreAsync());
     private async Task DisposeCoreAsync()
     {
-        _closing = true; _volumeTimer.Stop(); _autoTimer.Stop(); _startupDiscoveryTimer.Stop(); _discoverySearchTimer.Stop(); _discovery.Dispose();
+        _closing = true; _wakeTimer?.Stop(); _volumeTimer.Stop(); _autoTimer.Stop(); _startupDiscoveryTimer.Stop(); _discoverySearchTimer.Stop(); _discovery.Dispose();
         _nowPlayingStop.Cancel();
         await _nowPlayingWork;
         _nowPlayingStop.Dispose();

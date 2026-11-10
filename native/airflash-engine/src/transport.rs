@@ -371,7 +371,7 @@ fn event_loop(connection: &mut Connection, health: &Health, stop: &Cancellation)
             // here and nowhere else. Keep the channel alive even when the body is
             // something we cannot read.
             let parsed = crate::events::parse(&msg.body);
-            if !parsed.commands.is_empty() || parsed.volume.is_some() {
+            if !parsed.commands.is_empty() || parsed.volume.is_some() || parsed.unknown.is_some() {
                 state.commands.push(parsed);
             }
         }

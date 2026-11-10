@@ -109,7 +109,7 @@
           <ItemsControl ItemsSource="{Binding Receivers}" loc:Motion.Stagger="True">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Border Padding="10" Margin="0,0,0,8" CornerRadius="14" BorderThickness="1">
+                <Border Padding="10" Margin="0,0,0,8" CornerRadius="14" BorderThickness="1" loc:Motion.Press="True">
                   <Border.ContextMenu>
                     <ContextMenu Style="{StaticResource TextMenu}">
                       <MenuItem Header="{loc:Text 'Hide this speaker'}" Click="HideReceiver_Click"/>
@@ -208,8 +208,8 @@
               <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
             <TextBlock Text="{loc:Text 'Delay'}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-            <ComboBox x:Name="DelayOption" Grid.Column="1" SelectedIndex="{Binding DelayMode, Mode=TwoWay}" ToolTip="{loc:Text 'Lowest keeps sound closest to video and steps the delay up only if the stream has trouble. Most stable gives lost packets time to be sent again.'}" AutomationProperties.Name="{loc:Text 'Delay'}">
-              <ComboBoxItem Content="{loc:Text 'Lowest (adapts)'}"/>
+            <ComboBox x:Name="DelayOption" Grid.Column="1" SelectedIndex="{Binding DelayMode, Mode=TwoWay}" ToolTip="{loc:Text 'Auto starts at the shortest delay the speaker can play and steps it up only if the stream has trouble. Most stable gives lost packets time to be sent again.'}" AutomationProperties.Name="{loc:Text 'Delay'}">
+              <ComboBoxItem Content="{loc:Text 'Auto (adapts)'}"/>
               <ComboBoxItem Content="{loc:Text 'Balanced'}"/>
               <ComboBoxItem Content="{loc:Text 'Most stable'}"/>
             </ComboBox>

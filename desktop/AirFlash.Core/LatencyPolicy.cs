@@ -37,6 +37,11 @@ public static class LatencyPolicy
             var clamped = Math.Clamp(custom, 0, 2000);
             return new(clamped, clamped, [clamped], "custom target");
         }
+        // A HomePod that keeps its own clock plays nothing at a 50 ms lead: the stream
+        // looks healthy from here (no late sends, no underruns) while the speaker
+        // stays silent, so nothing would ever step the ladder up. Start at the
+        // shortest lead it is known to play.
+        if (ptp && receiver.FollowReceiverClock) return new(120, 120, [120, 160, 200], "homepod own clock");
         return (alac, ptp) switch
         {
             // ALAC solo: validated at 50 ms; the ladder only moves upward from there.

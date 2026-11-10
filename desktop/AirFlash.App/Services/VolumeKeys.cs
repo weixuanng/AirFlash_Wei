@@ -21,6 +21,9 @@ internal sealed class VolumeKeys : IDisposable
     private IntPtr _hook;
     private volatile bool _active;
     private int _pending;
+    private double _lastLevel;
+    private long _lastAt;
+    private AirFlash.App.Ui.VolumeHud? _hud;
 
     public VolumeKeys(AppViewModel viewModel, Dispatcher dispatcher)
     {
@@ -62,7 +65,19 @@ internal sealed class VolumeKeys : IDisposable
                 _dispatcher.BeginInvoke(() =>
                 {
                     var step = Interlocked.Exchange(ref _pending, 0);
-                    if (step != 0 && _viewModel.VolumeWritable) _viewModel.DeviceVolume += step;
+                    if (step == 0 || !_viewModel.VolumeWritable) return;
+                    // The speaker confirms a change later, so the level asked for is
+                    // worked out here instead of being read back.
+                    // A run of presses builds on the last level asked for, which the
+                    // speaker may not have confirmed yet.
+                    var now = Environment.TickCount64;
+                    var from = now - _lastAt < 800 ? _lastLevel : _viewModel.DeviceVolume;
+                    var level = Math.Clamp(Math.Round(from + step), 0, 100);
+                    _lastLevel = level; _lastAt = now;
+                    _viewModel.DeviceVolume = level;
+                    // Windows shows nothing for a volume it does not own.
+                    try { (_hud ??= new()).Present(level); }
+                    catch (Exception error) { AppPaths.Log($"Volume overlay failed: {error.Message}"); }
                 });
                 return 1;
             }
@@ -74,6 +89,7 @@ internal sealed class VolumeKeys : IDisposable
         _viewModel.PropertyChanged -= OnPropertyChanged;
         _active = false;
         Remove();
+        _hud?.Close(); _hud = null;
     }
     private delegate IntPtr HookProcedure(int code, IntPtr wParam, IntPtr lParam);
     [DllImport("user32.dll", SetLastError = true)] private static extern IntPtr SetWindowsHookEx(int id, HookProcedure procedure, IntPtr module, uint thread);
