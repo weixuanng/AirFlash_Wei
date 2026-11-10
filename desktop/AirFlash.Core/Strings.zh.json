@@ -392,5 +392,14 @@
   "Stable connection (adds delay)": "稳定连接（增加延迟）",
   "Uses a longer buffer so brief Wi-Fi losses do not stutter. Sound runs about half a second behind video.": "使用更长的缓冲，短暂的 Wi-Fi 丢包不会造成卡顿。声音会比画面晚约半秒。",
   "Capture apps directly": "直接采集应用音频",
-  "Takes audio from apps before the PC speakers, so the PC can stay muted. Turn off if the speaker goes silent.": "在电脑扬声器之前采集应用音频，电脑可以保持静音。如果音箱没有声音，请关闭此项。"
+  "Takes audio from apps before the PC speakers, so the PC can stay muted. Turn off if the speaker goes silent.": "在电脑扬声器之前采集应用音频，电脑可以保持静音。如果音箱没有声音，请关闭此项。",
+  "Delay": "延迟",
+  "Lowest (adapts)": "最低（自动调整）",
+  "Balanced": "均衡",
+  "Most stable": "最稳定",
+  "Lowest keeps sound closest to video and steps the delay up only if the stream has trouble. Most stable gives lost packets time to be sent again.": "“最低”让声音最接近画面，仅在串流出现问题时才逐步增加延迟。“最稳定”让丢失的数据包有时间重新发送。",
+  "Hide this speaker": "隐藏此音箱",
+  "Show hidden speakers ({0})": "显示已隐藏的音箱（{0}）",
+  "Volume keys control the speaker": "音量键控制音箱",
+  "While connected, the keyboard volume keys change the speaker instead of this PC.": "连接期间，键盘音量键调节音箱音量，而不是此电脑。"
 }

@@ -392,5 +392,14 @@
   "Stable connection (adds delay)": "Stabile Verbindung (mehr Verzögerung)",
   "Uses a longer buffer so brief Wi-Fi losses do not stutter. Sound runs about half a second behind video.": "Verwendet einen längeren Puffer, damit kurze WLAN-Aussetzer nicht stottern. Der Ton liegt etwa eine halbe Sekunde hinter dem Bild.",
   "Capture apps directly": "Apps direkt aufnehmen",
-  "Takes audio from apps before the PC speakers, so the PC can stay muted. Turn off if the speaker goes silent.": "Nimmt den Ton der Apps vor den PC-Lautsprechern ab, sodass der PC stumm bleiben kann. Ausschalten, falls der Lautsprecher verstummt."
+  "Takes audio from apps before the PC speakers, so the PC can stay muted. Turn off if the speaker goes silent.": "Nimmt den Ton der Apps vor den PC-Lautsprechern ab, sodass der PC stumm bleiben kann. Ausschalten, falls der Lautsprecher verstummt.",
+  "Delay": "Verzögerung",
+  "Lowest (adapts)": "Niedrigste (passt sich an)",
+  "Balanced": "Ausgewogen",
+  "Most stable": "Am stabilsten",
+  "Lowest keeps sound closest to video and steps the delay up only if the stream has trouble. Most stable gives lost packets time to be sent again.": "„Niedrigste“ hält den Ton am nächsten am Bild und erhöht die Verzögerung nur bei Problemen. „Am stabilsten“ gibt verlorenen Paketen Zeit für eine erneute Übertragung.",
+  "Hide this speaker": "Diesen Lautsprecher ausblenden",
+  "Show hidden speakers ({0})": "Ausgeblendete Lautsprecher anzeigen ({0})",
+  "Volume keys control the speaker": "Lautstärketasten steuern den Lautsprecher",
+  "While connected, the keyboard volume keys change the speaker instead of this PC.": "Solange verbunden, ändern die Lautstärketasten den Lautsprecher statt diesen PC."
 }

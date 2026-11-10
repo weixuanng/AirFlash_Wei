@@ -96,6 +96,12 @@ internal static class UiSmoke
             Check(primary.Focus() && primary.IsKeyboardFocused, "primary connect button remains keyboard focusable", checks);
             Check(!app.PrimaryIsStop && app.PrimaryLabel == L.Format("Connect to {0}", app.Receivers[0].Receiver.Name) && primary.IsEnabled, "main button offers Connect when idle", checks);
             CheckPanelIcons(panel, app, checks);
+            // The volume pill draws its own fill: half the level must be half the width.
+            var pill = new System.Windows.Controls.Slider { Style = (Style)Application.Current.FindResource("VolumeSlider"), Minimum = 0, Maximum = 100, Value = 50 };
+            pill.Measure(new Size(200, 26)); pill.Arrange(new Rect(0, 0, 200, 26));
+            ControlPanel.FillVolume(pill);
+            pill.Measure(new Size(200, 26)); pill.Arrange(new Rect(0, 0, 200, 26)); pill.UpdateLayout();
+            Check(pill.Template.FindName("PART_Fill", pill) is FrameworkElement { ActualWidth: > 99 and < 101, ActualHeight: > 25 }, "volume pill fills in proportion to the level", checks);
             Render(panel, Path.Combine(directory, "panel-icons-idle.png"), 1);
             Invoke(primary);
             await Until(() => app.Snapshot.State == PlaybackState.Streaming);

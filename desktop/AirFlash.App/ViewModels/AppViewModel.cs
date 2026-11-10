@@ -60,18 +60,59 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
         }
     }
     public string DeviceVolumeText => $"{(int)DeviceVolume}";
-    /// <summary>A 500 ms buffer in place of 120 ms: lost packets have time to be sent
-    /// again, at the cost of more delay behind video.</summary>
-    public bool StableConnection
+    /// <summary>A change would be accepted right now. The keyboard keys are only taken
+    /// from Windows while this holds, so a key is never swallowed for nothing.</summary>
+    public bool VolumeWritable => VolumeAvailable && _snapshot.DeviceVolume?.Available == true;
+    private readonly PanelPreferences _panel = PanelPreferences.Load();
+    /// <summary>The keyboard's volume keys change the speaker while it is streaming.</summary>
+    public bool VolumeKeysEnabled
     {
-        get => _settings.LatencyMode == "buffered";
+        get => _panel.VolumeKeys;
+        set { if (value == _panel.VolumeKeys) return; _panel.VolumeKeys = value; _panel.Save(); AppPaths.Log($"Setting volume_keys={value}"); Notify(); }
+    }
+    /// <summary>Speakers the user has hidden from the list.</summary>
+    public int HiddenCount => _settings.Receivers.Values.Count(options => options.Hidden);
+    public bool HasHidden => HiddenCount > 0;
+    public string ShowHiddenLabel => L.Format("Show hidden speakers ({0})", HiddenCount);
+    public void HideReceiver(ReceiverViewModel row)
+    {
+        // The speaker in use stays: hiding it would leave a session with no row.
+        if (_snapshot.IsActive && _snapshot.Receiver?.Id == row.Receiver.Id) return;
+        _settings.Options(row.Receiver.Id).Hidden = true;
+        AppPaths.Log($"Receiver hidden: {row.Receiver.Id}");
+        HiddenChanged();
+    }
+    public void ShowHiddenReceivers()
+    {
+        foreach (var options in _settings.Receivers.Values) options.Hidden = false;
+        HiddenChanged();
+    }
+    private void HiddenChanged()
+    {
+        VolumeChanged(); RefreshReceivers();
+        Notify(nameof(HiddenCount)); Notify(nameof(HasHidden)); Notify(nameof(ShowHiddenLabel));
+    }
+    private void NotifyOptions()
+    {
+        Notify(nameof(DelayMode)); Notify(nameof(DirectCapture)); Notify(nameof(DirectCaptureAvailable));
+        Notify(nameof(HiddenCount)); Notify(nameof(HasHidden)); Notify(nameof(ShowHiddenLabel));
+    }
+    /// <summary>
+    /// How much audio the speaker holds, as an index into <see cref="DelayModes"/>:
+    /// adaptive (starts at 50 ms and steps up only when the stream has trouble),
+    /// fixed 120 ms, or 500 ms so lost packets have time to be sent again.
+    /// </summary>
+    private static readonly string[] DelayModes = [LatencyPolicy.Mode, "realtime", "buffered"];
+    public int DelayMode
+    {
+        get => Math.Max(0, Array.IndexOf(DelayModes, _settings.LatencyMode));
         set
         {
-            if (value == StableConnection) return;
-            _settings.LatencyMode = value ? "buffered" : "realtime";
+            if (value < 0 || value >= DelayModes.Length || DelayModes[value] == _settings.LatencyMode) return;
+            _settings.LatencyMode = DelayModes[value];
             // Without this the speaker's own minimum replaces the longer buffer.
-            _settings.ForceLatency = value;
-            AppPaths.Log($"Setting stable_connection={value}");
+            _settings.ForceLatency = DelayModes[value] == "buffered";
+            AppPaths.Log($"Setting delay_mode={DelayModes[value]}");
             Notify(); VolumeChanged();
         }
     }
@@ -232,14 +273,13 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
             try { _defaultEndpoint = await _audio.GetDefaultEndpointIdAsync(); }
             catch (Exception error) { ShowError(error); }
             if (_closing) return;
-            // Latency is fixed to Real-time (120 ms), startup is always on and
-            // the theme follows the system: no UI edits these anymore, so a
-            // stale configuration value must never reach the engine or autostart.
+            // Startup is always on and the theme follows the system: no UI edits
+            // these anymore, so a stale configuration value must never reach the
+            // engine or autostart. The delay is one of the panel's three choices.
             var fixedDefaultsChanged = false;
-            // Two buffers are offered: Real-time (120 ms) and Stable (500 ms).
-            if (_settings.LatencyMode is not ("realtime" or "buffered")) { _settings.LatencyMode = "realtime"; fixedDefaultsChanged = true; }
+            if (!DelayModes.Contains(_settings.LatencyMode)) { _settings.LatencyMode = "realtime"; fixedDefaultsChanged = true; }
             if (_settings.ForceLatency != (_settings.LatencyMode == "buffered")) { _settings.ForceLatency = _settings.LatencyMode == "buffered"; fixedDefaultsChanged = true; }
-            Notify(nameof(StableConnection)); Notify(nameof(DirectCapture));
+            NotifyOptions();
             if (!_settings.StartAtLogin) { _settings.StartAtLogin = true; fixedDefaultsChanged = true; }
             if (_settings.Theme != "system") { _settings.Theme = "system"; fixedDefaultsChanged = true; }
             foreach (var options in _settings.Receivers.Values)
@@ -309,7 +349,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
             if (_closing) return;
             var next = await _audio.GetDefaultEndpointIdAsync();
             if (_closing) return;
-            if (!IsStopping && intent == _playIntent && _settings.CaptureMode == "loopback" && next != _defaultEndpoint && _snapshot.IsActive && _snapshot.State != PlaybackState.Pairing && _snapshot.Receiver is { } receiver) await Session.StartAsync(receiver, _settings.Clone());
+            if (!IsStopping && intent == _playIntent && _settings.CaptureMode is "loopback" or "system" && next != _defaultEndpoint && _snapshot.IsActive && _snapshot.State != PlaybackState.Pairing && _snapshot.Receiver is { } receiver) await Session.StartAsync(receiver, _settings.Clone());
             _defaultEndpoint = next;
             if (!_snapshot.IsActive) await _audio.RestoreAsync();
         }
@@ -347,7 +387,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
             ReceiverCatalog.ApplyMigrations(baseline, reconciliation.Migrations, currentSnapshot.Receiver?.Id);
             _settings = SettingsMerge.Merge(baseline, live, reconciliation.Settings);
             _volumeDirty = revision != _editRevision;
-            Notify(nameof(Settings)); SettingsChanged?.Invoke();
+            Notify(nameof(Settings)); NotifyOptions(); SettingsChanged?.Invoke();
             var migrated = reconciliation.Migrations.Where(p => p.Key != p.Value && (originalSettings.Receivers.ContainsKey(p.Key) || currentSnapshot.Receiver?.Id == p.Key)).ToArray();
             if (migrated.Length > 0) AppPaths.Log("Receiver identity migrated: " + System.Text.Json.JsonSerializer.Serialize(migrated));
         }
@@ -411,12 +451,12 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
         if (MixedGroupMigration.IsSettled(_settings))
         {
             await store.CompleteMixedGroupMigrationAsync(_settings);
-            Notify(nameof(Settings)); SettingsChanged?.Invoke();
+            Notify(nameof(Settings)); NotifyOptions(); SettingsChanged?.Invoke();
         }
         else if (report.Changed)
         {
             await SaveSettingsAsync(_settings);
-            Notify(nameof(Settings)); SettingsChanged?.Invoke();
+            Notify(nameof(Settings)); NotifyOptions(); SettingsChanged?.Invoke();
         }
     }
     private void MergeManualReceivers()
@@ -457,7 +497,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
         if (_closing || !ReferenceEquals(snapshot, Session.Snapshot)) return;
         var title = StatusTitle; var tone = StatusTone; var detail = StatusDetail; var errors = ErrorDetails; var hint = ActionHint;
         var previous = _snapshot;
-        var volumeAvailable = VolumeAvailable; var volume = DeviceVolume;
+        var volumeAvailable = VolumeAvailable; var volume = DeviceVolume; var volumeWritable = VolumeWritable;
         _snapshot = snapshot;
         if (volumeAvailable != VolumeAvailable)
         {
@@ -465,6 +505,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
             AppPaths.Log($"Speaker volume control available={VolumeAvailable}; status={snapshot.DeviceVolume?.Status}; volume={snapshot.DeviceVolume?.Actual}");
         }
         if (volume != DeviceVolume) { Notify(nameof(DeviceVolume)); Notify(nameof(DeviceVolumeText)); }
+        if (volumeWritable != VolumeWritable) Notify(nameof(VolumeWritable));
         if (Session.RequiresManualReconnect) _autoSuppressed = true;
         Notify(nameof(Snapshot));
         if (title != StatusTitle) Notify(nameof(StatusTitle));
@@ -499,7 +540,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
         try
         {
             if (_closing || IsStopping || intent != _playIntent || !EngineReady || Session.NeedsCleanup) return;
-            if (_settings.CaptureMode == "loopback") _defaultEndpoint = await _audio.GetDefaultEndpointIdAsync();
+            if (_settings.CaptureMode is "loopback" or "system") _defaultEndpoint = await _audio.GetDefaultEndpointIdAsync();
             if (_closing || IsStopping || intent != _playIntent) return;
             if (startIntent == SessionStartIntent.Manual) _autoSuppressed = false;
             Notice = "";
@@ -629,7 +670,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
                 if (before.DiscoveryInterfaceId != _settings.DiscoveryInterfaceId) _discovery.SetInterface(_settings.DiscoveryInterfaceId);
                 var oldCatalog = AllReceivers;
                 MergeManualReceivers(); RefreshReceivers();
-                Notify(nameof(Settings));
+                Notify(nameof(Settings)); NotifyOptions();
                 SettingsChanged?.Invoke();
                 if (!CatalogEqual(oldCatalog, AllReceivers)) CatalogChanged?.Invoke();
             }

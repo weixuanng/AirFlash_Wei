@@ -22,8 +22,7 @@ public sealed class ForcedLatencySettingsTests
     [InlineData("{\"schema_version\":4}", "realtime")]
     [InlineData("{\"schema_version\":5,\"LATENCY_MODE\":\"custom\",\"custom_buffer_ms\":650}", "custom")]
     [InlineData("{\"schema_version\":4,\"latency_mode\":\"buffered\"}", "buffered")]
-    [InlineData("{\"schema_version\":5,\"latency_mode\":\"adaptive\"}", "realtime")]
-    [InlineData("{\"schema_version\":5,\"LATENCY_MODE\":\"ADAPTIVE\"}", "realtime")]
+    [InlineData("{\"schema_version\":5,\"latency_mode\":\"adaptive\"}", "adaptive")]
     [InlineData("{\"schema_version\":5,\"latency_mode\":\"custom\",\"custom_buffer_ms\":650,\"receivers\":{\"a\":{\"latency_mode\":\"adaptive\"},\"b\":{\"latency_mode\":\"buffered\"}}}", "custom")]
     public void ExistingFilesKeepTheReleaseModeAndRecoveryAcrossRepeatedSaves(string json, string expected)
     {
@@ -46,7 +45,7 @@ public sealed class ForcedLatencySettingsTests
     }
 
     [Fact]
-    public void SavingAProgrammaticAdaptiveValueNormalizesItToRealtime()
+    public void TheGlobalAdaptiveModeIsKeptAndAPerReceiverOneIsNot()
     {
         using var fixture = new Fixture();
         var settings = new AppSettings();
@@ -55,7 +54,7 @@ public sealed class ForcedLatencySettingsTests
         var store = new SettingsStore(fixture.Path);
         store.Save(settings);
         var loaded = store.Load();
-        Assert.Equal("realtime", loaded.LatencyMode);
+        Assert.Equal("adaptive", loaded.LatencyMode);
         Assert.Equal("realtime", loaded.ReadOptions("a").LatencyMode);
     }
 

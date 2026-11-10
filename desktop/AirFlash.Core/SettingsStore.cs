@@ -184,7 +184,8 @@ public sealed class SettingsStore : ISettingsStore
                 && mode.Equals(LatencyPolicy.Mode, StringComparison.OrdinalIgnoreCase))
                 owner[key] = "realtime";
         }
-        Normalize(json);
+        // The global mode may be adaptive again: it is the panel's "Lowest" delay.
+        // A per-receiver adaptive override has no control and stays retired.
         if (json["receivers"] is JsonObject receivers)
             foreach (var receiver in receivers.Select(pair => pair.Value).OfType<JsonObject>()) Normalize(receiver);
     }
@@ -194,7 +195,6 @@ public sealed class SettingsStore : ISettingsStore
         if (_unsupportedSchema) throw new NotSupportedException(L.Get("This configuration is from a newer version. Update the app first."));
         if (settings.SchemaVersion > AppSettings.CurrentSchemaVersion) throw new NotSupportedException(L.Get("This configuration is from a newer version. Update the app first."));
         var saved = settings.Clone();
-        saved.LatencyMode = saved.LatencyMode.Equals(LatencyPolicy.Mode, StringComparison.OrdinalIgnoreCase) ? "realtime" : saved.LatencyMode;
         foreach (var options in saved.Receivers.Values)
             if (options.LatencyMode?.Equals(LatencyPolicy.Mode, StringComparison.OrdinalIgnoreCase) == true) options.LatencyMode = "realtime";
         // While the one-time Q45 split is pending, keep the file one version
