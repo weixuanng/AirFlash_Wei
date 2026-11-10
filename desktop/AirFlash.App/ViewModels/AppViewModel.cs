@@ -556,9 +556,48 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
         finally { _settingsGate.Release(); }
         await FlushVolumeAsync();
     }
+    // ---- Sleep. The speaker is let go before the PC sleeps and taken back on wake,
+    // so nothing else in the house finds it held by a sleeping laptop.
+    private string? _wakeTarget;
+    private bool _asleep;
+    private int _wakeTries;
+    private DispatcherTimer? _wakeTimer;
+    private const int WakeTries = 30;
+    /// <summary>Called on the UI thread just before the PC sleeps.</summary>
+    public Task SuspendAsync()
+    {
+        if (_closing) return Task.CompletedTask;
+        _wakeTimer?.Stop();
+        // A second notice for the same sleep must not forget what was playing.
+        if (!_asleep) _wakeTarget = SessionHeld ? _snapshot.Receiver?.Id : null;
+        _asleep = true;
+        AppPaths.Log($"Sleep: releasing speaker={_wakeTarget is not null}");
+        return _wakeTarget is null ? Task.CompletedTask : StopAsync(userInitiated: false);
+    }
+    /// <summary>Called on the UI thread once the PC is awake again.</summary>
+    public void Resume()
+    {
+        if (!_asleep) return;
+        _asleep = false;
+        AppPaths.Log($"Wake: reconnecting={_wakeTarget is not null}");
+        if (_closing) return;
+        if (_wakeTarget is null) { ScheduleAutoConnect(); return; }
+        _wakeTries = 0;
+        // Wi-Fi and discovery need a moment after wake, so the speaker is retried for a while.
+        _wakeTimer ??= new(TimeSpan.FromSeconds(3), DispatcherPriority.Background, async (_, _) => { try { await WakeTickAsync(); } catch (Exception error) { ShowError(error); } }, _dispatcher);
+        _wakeTimer.Start();
+    }
+    private async Task WakeTickAsync()
+    {
+        if (_closing || _asleep || _wakeTarget is not { } target || SessionHeld || ++_wakeTries > WakeTries) { _wakeTimer?.Stop(); if (!_asleep) _wakeTarget = null; return; }
+        if (IsStopping || Session.NeedsCleanup || !EngineReady) return;
+        if (Receivers.FirstOrDefault(r => r.Receiver.Id == target && r.CanPlay) is not { } row) return;
+        _wakeTimer?.Stop(); _wakeTarget = null;
+        await ToggleAsync(row.Receiver, SessionStartIntent.Automatic);
+    }
     public Task StopAsync(bool userInitiated = true)
     {
-        if (userInitiated) _autoSuppressed = true;
+        if (userInitiated) { _autoSuppressed = true; _wakeTarget = null; }
         if (_stopTask is not null) return _stopTask;
         ++_playIntent;
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -598,7 +637,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
     internal async Task TryAutoConnectAsync()
     {
         // While yielding, the session itself resumes once the receiver is free.
-        if (_closing || IsStopping || Session.NeedsCleanup || Session.RequiresManualReconnect || Session.IsYielding || !EngineReady || _autoSuppressed || Session.Snapshot.IsActive) return;
+        if (_closing || _asleep || _wakeTarget is not null || IsStopping || Session.NeedsCleanup || Session.RequiresManualReconnect || Session.IsYielding || !EngineReady || _autoSuppressed || Session.Snapshot.IsActive) return;
         // An explicit per-receiver choice wins; otherwise the last-used receiver
         // (AutoConnectLastReceiver) or every receiver (AutoConnectOnDiscover).
         var eligible = AllReceivers.Where(r => r.Online && r.Complete && !_settings.ReadOptions(r.Id).Hidden
@@ -719,7 +758,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
     public ValueTask DisposeAsync() => new(_disposeTask ??= DisposeCoreAsync());
     private async Task DisposeCoreAsync()
     {
-        _closing = true; _volumeTimer.Stop(); _autoTimer.Stop(); _startupDiscoveryTimer.Stop(); _discoverySearchTimer.Stop(); _discovery.Dispose();
+        _closing = true; _wakeTimer?.Stop(); _volumeTimer.Stop(); _autoTimer.Stop(); _startupDiscoveryTimer.Stop(); _discoverySearchTimer.Stop(); _discovery.Dispose();
         _nowPlayingStop.Cancel();
         await _nowPlayingWork;
         _nowPlayingStop.Dispose();
@@ -748,8 +787,6 @@ public sealed class ReceiverViewModel : ObservableObject
     }
     public string Name => Receiver.Name;
     public string Detail => Receiver.Detail;
-    /// <summary>A HomePod, or a pair of them: drawn with the HomePod glyph.</summary>
-    public bool IsHomePod => Receiver.Peers.Append(Receiver).Any(r => r.Model.StartsWith("AudioAccessory", StringComparison.Ordinal) || r.Model.Contains("HomePod", StringComparison.OrdinalIgnoreCase));
     public bool Active => _app.SessionHeld && _app.Snapshot.Receiver?.Id == Receiver.Id;
     public bool IsStopping => _app.IsStopping && _app.Snapshot.Receiver?.Id == Receiver.Id;
     public bool NeedsDisconnect => Active || _app.Session.NeedsCleanup && _app.Snapshot.Receiver?.Id == Receiver.Id;

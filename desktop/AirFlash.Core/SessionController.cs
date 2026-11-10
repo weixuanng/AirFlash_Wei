@@ -866,6 +866,8 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
                             }
                             PublishCurrent(epoch);
                         }
+                        else if (kind == "event_unrecognised")
+                            log?.Invoke($"Receiver event not understood: {item.Text("keys")}");
                         else if (kind == "remote_command" && startedAt != 0)
                         {
                             lock (_sync) { if (epoch != _generation) continue; }

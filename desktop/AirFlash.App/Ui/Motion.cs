@@ -48,6 +48,10 @@ public static class Motion
     // SwiftUI's presets: snappy (0.5 s, bounce 0.15) moves things, bouncy (0.5 s, 0.3) answers a press.
     private static readonly SpringEase Snappy = new(0.5, 0.15);
     private static readonly SpringEase Bouncy = new(0.5, 0.3);
+    // No overshoot: for a level that must never read past its target.
+    private static readonly SpringEase Smooth = new(0.35, 0);
+    internal static readonly TimeSpan SmoothTime = Smooth.Settle;
+    internal static readonly IEasingFunction SmoothCurve = Frozen(Smooth);
     internal static readonly TimeSpan Spring = Snappy.Settle;
     private static readonly TimeSpan Fade = TimeSpan.FromMilliseconds(200);
     private static readonly TimeSpan StaggerBase = TimeSpan.FromMilliseconds(90);

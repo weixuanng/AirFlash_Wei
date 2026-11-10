@@ -144,6 +144,18 @@ internal static class UiSmoke
                 panel.ShowPanel(); await Pump();
                 CheckPanelIcons(panel, app, checks);
                 foreach (var scale in new[] { 1d, 1.25, 1.5, 1.75, 2d }) Render(panel, Path.Combine(directory, $"panel-{(dark ? "dark" : "light")}-{scale * 100}.png"), scale);
+                {
+                    var hud = new VolumeHud();
+                    hud.Present(50); await Pump();
+                    var track = (FrameworkElement)hud.FindName("Track"); var fill = (FrameworkElement)hud.FindName("Fill");
+                    Check(hud.IsVisible && !hud.IsActive && track.ActualWidth > 60 && Math.Abs(hud.FillTarget - track.ActualWidth / 2) < 0.01 && Math.Abs(fill.ActualWidth - hud.FillTarget) < 0.5,
+                        $"the volume overlay shows half volume as a half-filled bar without taking focus ({(dark ? "dark" : "light")})", checks);
+                    hud.Present(100); await Pump();
+                    Check(Math.Abs(fill.ActualWidth - track.ActualWidth) < 0.5, "the volume overlay fills completely at full volume", checks);
+                    hud.Present(28); await Pump();
+                    Render(hud, Path.Combine(directory, $"volume-hud-{(dark ? "dark" : "light")}.png"), 2);
+                    hud.Close();
+                }
                 var quit = Descendants(panel).OfType<Button>().Single(b => System.Windows.Automation.AutomationProperties.GetName(b) == L.Get("Quit"));
                 var quitRequested = false;
                 void OnQuit() => quitRequested = true;
@@ -278,15 +290,13 @@ internal static class UiSmoke
         Check(icons.Count(p => p.Name == "ReceiverIcon") == app.Receivers.Count
             && icons.Count(p => p.Name == "PrimaryIcon") == 1,
             "each receiver displays its own speaker vector and the panel has one primary icon", checks);
-        Check(app.Receivers.Any(r => r.IsHomePod) && app.Receivers.Any(r => !r.IsHomePod),
-            "the sample speakers cover both the HomePod glyph and the generic one", checks);
         Check(Motion.ApplyFrameRate(120) && System.Windows.Media.Animation.Timeline.GetDesiredFrameRate(new System.Windows.Media.Animation.DoubleAnimation()) == 120,
             "animations step at the display's rate when it is above 60 Hz", checks);
         foreach (var icon in icons)
         {
             var key = icon.Name switch
             {
-                "ReceiverIcon" => (icon.DataContext as AirFlash.App.ViewModels.ReceiverViewModel)?.IsHomePod == true ? "HomePodIconGeometry" : "ReceiverIconGeometry",
+                "ReceiverIcon" => "ReceiverIconGeometry",
                 _ => app.PrimaryIsStop ? "StopIconGeometry" : "PlayIconGeometry"
             };
             Check(ReferenceEquals(icon.Data, panel.FindResource(key)) && !icon.Data.IsEmpty(),

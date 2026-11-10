@@ -2254,6 +2254,7 @@ fn send_packets(
         ..LiveLead::default()
     };
     let mut lead_revision = 0;
+    let mut seen_events = std::collections::HashSet::<String>::new();
     // RTP-side evidence for distinguishing a transport failure from a local
     // sender stall when a successful re-anchor absorbs a missed deadline (Q43,
     // Q44). The pre-stall window is compared against the sender's own steady
@@ -2665,6 +2666,15 @@ fn send_packets(
             // them so the desktop side can drive the system media session.
             for member in members.iter_mut() {
                 for command in member.health.commands() {
+                    if let Some(keys) = &command.unknown {
+                        // Once per distinct shape: a receiver may repeat the same notice all session.
+                        if seen_events.len() < 16 && seen_events.insert(keys.clone()) {
+                            emit(
+                                json!({"event":"event_unrecognised","host":member.peer.host,"keys":keys}),
+                            );
+                        }
+                        continue;
+                    }
                     emit(json!({
                         "event": "remote_command",
                         "host": member.peer.host,

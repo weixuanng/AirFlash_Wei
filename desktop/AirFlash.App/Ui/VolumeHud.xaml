@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shown when the volume keys change the speaker: Windows draws nothing for a
+     volume it does not own. A glass capsule that springs in above the taskbar,
+     fills to the new level and fades out. It never takes focus or clicks. -->
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="AirFlash.App.Ui.VolumeHud"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent" ShowInTaskbar="False" ShowActivated="False" Topmost="True" Focusable="False" IsHitTestVisible="False"
+        ResizeMode="NoResize" SizeToContent="WidthAndHeight" FontFamily="{DynamicResource BodyFont}">
+  <Grid Margin="16">
+    <Border x:Name="Capsule" Width="236" Height="48" CornerRadius="24" BorderThickness="1" Background="{DynamicResource CanvasBrush}" BorderBrush="{DynamicResource GlassEdgeBrush}" RenderTransformOrigin="0.5,1" Opacity="0">
+      <Border.RenderTransform>
+        <TransformGroup><ScaleTransform x:Name="CapsuleScale"/><TranslateTransform x:Name="CapsuleOffset"/></TransformGroup>
+      </Border.RenderTransform>
+      <Border.Effect><DropShadowEffect BlurRadius="18" ShadowDepth="3" Direction="270" Opacity="0.35" Color="Black"/></Border.Effect>
+      <Grid>
+        <Border CornerRadius="23" Background="{DynamicResource GlassBrush}"/>
+        <Grid Margin="16,0,16,0">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="30"/>
+          </Grid.ColumnDefinitions>
+          <Viewbox Width="18" Height="18" VerticalAlignment="Center">
+            <Path Width="24" Height="24" Stroke="{DynamicResource TextBrush}" StrokeThickness="1.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                  Data="M 4,9.5 H 7.5 L 12,5.5 V 18.5 L 7.5,14.5 H 4 Z M 15.5,9 A 4.2,4.2 0 0 1 15.5,15 M 18,6.5 A 7.6,7.6 0 0 1 18,17.5"/>
+          </Viewbox>
+          <Border x:Name="Track" Grid.Column="1" Height="8" CornerRadius="4" Margin="12,0,10,0" VerticalAlignment="Center" Background="{DynamicResource LineBrush}" ClipToBounds="True">
+            <Border x:Name="Fill" Height="8" CornerRadius="4" HorizontalAlignment="Left" Width="0" Background="{DynamicResource AccentBrush}"/>
+          </Border>
+          <TextBlock x:Name="Level" Grid.Column="2" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" TextAlignment="Right" VerticalAlignment="Center"/>
+        </Grid>
+      </Grid>
+    </Border>
+  </Grid>
+</Window>
