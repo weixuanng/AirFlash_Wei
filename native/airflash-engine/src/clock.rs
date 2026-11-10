@@ -86,12 +86,22 @@ pub fn decide(our_p1: u8, remote: Option<BmcaDataset>, probes: u8) -> Verdict {
         probes,
     }
 }
-/// Our advertised priority1. Deliberately lax: preferring the receiver's clock is
-/// the whole point of the negotiation, and a tie keeps us as master.
-pub const OUR_PRIORITY1: u8 = 96;
+/// Our advertised priority1, as an iOS sender announces it. Together with the
+/// clock quality below it out-ranks every receiver's own dataset (248/248), which
+/// a receiver requires before it honours the sender's timeline.
+pub const OUR_PRIORITY1: u8 = 128;
+/// clockClass 6, accuracy 0x21 (100 ns) and variance 0x436a: the quality an iOS
+/// sender announces. OwnTone and Music Assistant send the same bytes.
+const OUR_QUALITY: [u8; 4] = [6, 0x21, 0x43, 0x6a];
+/// timeSource GPS, again as iOS announces it.
+const OUR_TIME_SOURCE: u8 = 0x20;
+/// How far a delay-derived offset may sit above the Sync-derived one: half the
+/// largest round trip accepted from a followed receiver.
+const DELAY_AGREEMENT_NS: f64 = 10_000_000.0;
+/// The sender's Announce and its companion Signaling go out once a second.
+const ANNOUNCE_INTERVAL: Duration = Duration::from_secs(1);
 /// Announces asked for before giving up and staying master.
 const BMCA_PROBE_ATTEMPTS: u8 = 3;
-const BMCA_PROBE_INTERVAL: Duration = Duration::from_millis(300);
 /// The grandfather dataset an Announce carries, in the fields BMCA compares first.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BmcaDataset {
@@ -117,14 +127,13 @@ impl BmcaDataset {
             .then(self.grandmaster.cmp(&other.grandmaster))
             .then(self.steps_removed.cmp(&other.steps_removed))
     }
-    /// Our own dataset: a locally generated clock with a lax preference so a real
-    /// grandmaster wins, but a peer of equal rank does not cause a role flip.
+    /// Our own dataset, exactly as `announce` puts it on the wire.
     pub fn local(clock_id: u64) -> Self {
         Self {
-            priority1: 96,
-            clock_class: 248,
-            accuracy: 0xfe,
-            variance: 0xffff,
+            priority1: OUR_PRIORITY1,
+            clock_class: OUR_QUALITY[0],
+            accuracy: OUR_QUALITY[1],
+            variance: u16::from_be_bytes([OUR_QUALITY[2], OUR_QUALITY[3]]),
             priority2: 128,
             grandmaster: clock_id,
             steps_removed: 0,
@@ -149,19 +158,27 @@ pub fn parse_announce(packet: &[u8]) -> Option<BmcaDataset> {
     })
 }
 
-pub fn announce(clock: u64, seq: u16, ns: u64) -> Vec<u8> {
+/// The Announce an iOS sender sends as the session's grandmaster: zero origin
+/// timestamp and UTC offset, the iOS dataset, and a path trace naming this clock.
+pub fn announce(clock: u64, seq: u16) -> Vec<u8> {
     let mut p = header(11, 76, clock, seq, 0x0408, 0);
-    timestamp(&mut p[34..44], ns);
-    // Local oscillator; priority is a preference, not a claim of GPS accuracy.
-    p[47] = 96;
-    p[48] = 248;
-    p[49] = 0xfe;
-    p[50..52].copy_from_slice(&0xffffu16.to_be_bytes());
+    p[47] = OUR_PRIORITY1;
+    p[48..52].copy_from_slice(&OUR_QUALITY);
     p[52] = 128;
     p[53..61].copy_from_slice(&clock.to_be_bytes());
-    p[63] = 0xa0;
+    p[63] = OUR_TIME_SOURCE;
     p[64..68].copy_from_slice(&[0, 8, 0, 8]);
     p[68..].copy_from_slice(&clock.to_be_bytes());
+    p
+}
+/// An Announce from a peer with a plain local-oscillator dataset (priority1 96,
+/// class 248): the remote clock the role tests feed in.
+#[cfg(test)]
+pub fn peer_announce(clock: u64, seq: u16) -> Vec<u8> {
+    let mut p = announce(clock, seq);
+    p[47] = 96;
+    p[48..52].copy_from_slice(&[248, 0xfe, 0xff, 0xff]);
+    p[63] = 0xa0;
     p
 }
 /// A bare 64-byte Announce with the given priorities: no path trace, announce
@@ -215,9 +232,21 @@ pub fn follower_signaling(clock: u64, seq: u16, compact: bool) -> Vec<u8> {
     p[34..].copy_from_slice(&body);
     p
 }
+/// The Signaling every Apple clock sends its timing peers once a second: no
+/// target port, and the two Apple extension TLVs (subtypes 1 and 5) whose
+/// payload starts `00 00 03 01`. A HomePod sends these same 106 bytes. A clock
+/// that announces and syncs without them is not treated as a session clock.
+pub fn apple_signaling(clock: u64, seq: u16) -> Vec<u8> {
+    let mut p = header(12, 106, clock, seq, 0x0408, -128);
+    p[32] = 5;
+    p[44..58].copy_from_slice(&[0, 3, 0, 22, 0, 0x0d, 0x93, 0, 0, 1, 0, 0, 3, 1]);
+    p[70..84].copy_from_slice(&[0, 3, 0, 32, 0, 0x0d, 0x93, 0, 0, 5, 0, 0, 3, 1]);
+    p
+}
+/// A two-step Sync and its Follow_Up. The Sync carries no origin timestamp, as
+/// Apple clocks send it; the Follow_Up carries the precise one.
 pub fn sync_pair(clock: u64, seq: u16, ns: u64) -> (Vec<u8>, Vec<u8>) {
-    let mut sync = header(0, 44, clock, seq, 0x0608, -3);
-    timestamp(&mut sync[34..], ns);
+    let sync = header(0, 44, clock, seq, 0x0608, -3);
     let mut follow = header(8, 96, clock, seq, 0x0408, -3);
     timestamp(&mut follow[34..44], ns);
     let mut rate = vec![0; 28];
@@ -241,7 +270,17 @@ pub struct PtpMaster {
 #[derive(Default)]
 struct PeerState {
     follow: bool,
+    /// Followed without sending this peer anything: no requests, no Delay_Req,
+    /// no introduction. The offset then comes from its Sync/Follow_Up alone.
+    quiet: bool,
     active: bool,
+    /// When the once-a-second messages for this peer are next due.
+    next_second: Option<Instant>,
+    /// Sequence of the once-a-second Announce and Signaling this peer is sent.
+    second_seq: u16,
+    /// The peer addressed a Signaling to this clock's port identity, so it has
+    /// registered this engine as a timing peer.
+    named_by_peer: bool,
     local_address: Option<IpAddr>,
     exchanges: u64,
     last: Option<Instant>,
@@ -277,7 +316,6 @@ struct PeerState {
     better_master: bool,
     /// Announces requested while deciding the clock role at SETUP.
     bmca_probes: u8,
-    next_probe: Option<Instant>,
     /// Clock identity from this peer's last Announce, tracked regardless of the
     /// role we hold. A takeover commonly restarts the receiver's PTP association.
     announced_clock_id: Option<u64>,
@@ -425,6 +463,11 @@ impl PacketSnapshot {
 pub struct PeerSnapshot {
     pub host: IpAddr,
     pub mode: &'static str,
+    /// `sender`, `follow_quiet` or `follow_active`: what this engine does for
+    /// the peer's clock in this session.
+    pub strategy: &'static str,
+    /// The peer addressed a Signaling to this engine's port identity.
+    pub named_by_peer: bool,
     pub exchanges: u64,
     pub ready: bool,
     pub last_exchange_age_ms: Option<u128>,
@@ -471,6 +514,13 @@ fn subscription_index(kind: u8) -> Option<usize> {
     [0, 9, 11].iter().position(|value| *value == kind)
 }
 impl PeerState {
+    fn strategy(&self) -> &'static str {
+        match (self.follow, self.quiet) {
+            (false, _) => "sender",
+            (true, true) => "follow_quiet",
+            (true, false) => "follow_active",
+        }
+    }
     fn reject(&mut self, reason: &'static str) {
         self.packets.rejected += 1;
         self.packets.last_rejection = Some(reason);
@@ -572,19 +622,19 @@ impl PeerState {
         self.wake = WakeState {
             activated: Some(now),
             wakes: self.wake.wakes,
-            introductions: self.wake.introductions + u64::from(self.follow),
+            introductions: self.wake.introductions + u64::from(self.follow && !self.quiet),
             announces_naming_us: self.wake.announces_naming_us,
             closing: self.wake.closing,
             last_sync: self.wake.last_sync,
             settled: self.wake.settled && self.ready(now),
-            introduction: self.follow.then_some((now, 0, false)),
+            introduction: (self.follow && !self.quiet).then_some((now, 0, false)),
             next: Some(now + INTRODUCTION_SETTLE),
             ..Default::default()
         };
     }
     /// The next thing to send to a followed receiver whose clock is silent.
     fn nudge(&mut self, now: Instant) -> Option<Nudge> {
-        if !self.follow || !self.active {
+        if !self.follow || !self.active || self.quiet {
             return None;
         }
         // A started wake is always closed, so the receiver is never left
@@ -920,6 +970,10 @@ fn followed_packet(s: &mut PeerState, data: &[u8], local_ns: u64, now: Instant, 
             };
             *s = PeerState {
                 follow: true,
+                quiet: s.quiet,
+                next_second: s.next_second,
+                second_seq: s.second_seq,
+                named_by_peer: s.named_by_peer,
                 active: s.active,
                 local_address: s.local_address,
                 packets: std::mem::take(&mut s.packets),
@@ -985,22 +1039,41 @@ fn followed_packet(s: &mut PeerState, data: &[u8], local_ns: u64, now: Instant, 
                     return;
                 }
                 let offset = (outward + inward) / 2.0;
+                // The delay estimate sits half the apparent round trip above the
+                // Sync estimate, so this refuses an apparent round trip of more
+                // than about 20 ms. A HomePod's delay timestamps can be a tenth
+                // of a second away from its own Sync timestamps and still pass
+                // the 250 ms gate above; such a sample would move the audio
+                // anchor by half that error, so it is refused and the
+                // Sync/Follow_Up estimate keeps carrying the timeline.
+                if s.sync_offset
+                    .is_some_and(|sync| (offset - sync).abs() > DELAY_AGREEMENT_NS)
+                {
+                    s.packets.last_round_trip_ns = Some(rtt);
+                    s.reject("delay_disagrees_with_sync");
+                    s.delay = None;
+                    s.delay_age = None;
+                    s.offset = None;
+                    s.offset_at = None;
+                    return;
+                }
                 let previous = s.delay_offset(now);
                 s.jitter_ns = previous.map(|old| (old - offset).abs());
                 s.round_trip_ns = Some(rtt);
-                if previous.is_some_and(|old| (old - offset).abs() > 5_000_000.0) {
-                    s.reject("offset_jump");
-                    s.exchanges = 0;
-                    s.first = None;
-                    s.last = None;
-                    s.offset = None;
-                } else {
-                    s.offset = previous;
-                }
-                s.offset = Some(s.offset.map_or(offset, |old| old * 0.875 + offset * 0.125));
-                s.offset_at = Some(now);
                 s.delay = None;
                 s.delay_age = None;
+                if previous.is_some_and(|old| (old - offset).abs() > 5_000_000.0) {
+                    // One delay measurement that disagrees with the running
+                    // estimate is jitter on the path (routine on Wi-Fi), not a
+                    // lost clock. Drop the delay refinement and keep following
+                    // the Sync/Follow_Up estimate; the association stays ready.
+                    s.reject("offset_jump");
+                    s.offset = None;
+                    s.offset_at = None;
+                    return;
+                }
+                s.offset = Some(previous.map_or(offset, |old| old * 0.875 + offset * 0.125));
+                s.offset_at = Some(now);
             } else {
                 s.reject("delay_sequence");
             }
@@ -1160,8 +1233,14 @@ impl PtpMaster {
             worker: Some(worker),
         })
     }
-    /// SETPEERS establishes the session's timing relationship. Send fresh timing
-    /// requests afterwards even if the receiver ignored pre-session traffic.
+    /// Follow `host` without sending it anything. Call before `activate`.
+    pub fn follow_quietly(&self, host: IpAddr) {
+        if let Some(peer) = self.states.lock().unwrap().get_mut(&host) {
+            peer.quiet = peer.follow;
+        }
+    }
+    /// Start timing traffic for this peer. A sender-clock peer is activated on
+    /// the session SETUP reply, as iOS does; a followed one after SETPEERS.
     pub fn activate(&self, host: IpAddr, local_address: IpAddr) {
         if let Some(peer) = self.states.lock().unwrap().get_mut(&host) {
             peer.begin_session(local_address, Instant::now());
@@ -1224,6 +1303,8 @@ impl PtpMaster {
             .map(|(ip, s)| PeerSnapshot {
                 host: *ip,
                 mode: if s.follow { "receiver" } else { "sender" },
+                strategy: s.strategy(),
+                named_by_peer: s.named_by_peer,
                 exchanges: s.exchanges,
                 ready: s.ready(now),
                 last_exchange_age_ms: s.last.map(|last| now.duration_since(last).as_millis()),
@@ -1381,7 +1462,8 @@ fn respond_to_delay(
         54,
         clock_id,
         sequence,
-        if kind == 1 { 0x0408 } else { 0x0608 },
+        // Apple clocks mark Delay_Resp two-step as well.
+        0x0608,
         -3,
     );
     timestamp(&mut response[34..44], received_ns);
@@ -1443,7 +1525,6 @@ fn ptp_loop(
     network: &Mutex<NetworkSnapshot>,
 ) {
     let mut seq = 0u16;
-    let mut last_announce = Instant::now() - Duration::from_secs(2);
     let mut next_sync = Instant::now();
     let mut buf = [0u8; 2048];
     let mut nudge_seq = 0u16;
@@ -1490,8 +1571,16 @@ fn ptp_loop(
             for peer in peers {
                 let mut states = state.lock().unwrap();
                 let s = states.get_mut(peer).unwrap();
-                if !s.active {
+                // A quietly followed peer is only listened to.
+                if !s.active || s.quiet {
                     continue;
+                }
+                // Once a second, starting the moment the peer is activated.
+                let second = s.next_second.is_none_or(|at| now >= at);
+                let second_seq = s.second_seq;
+                if second {
+                    s.next_second = Some(now + ANNOUNCE_INTERVAL);
+                    s.second_seq = second_seq.wrapping_add(1);
                 }
                 if s.follow {
                     if s.subscription_due(now) {
@@ -1516,7 +1605,11 @@ fn ptp_loop(
                         }
                         s.next_subscription = Some(now + SUBSCRIPTION_RETRY);
                     }
-                    if now.duration_since(last_announce) >= Duration::from_secs(1) {
+                    if second {
+                        // The receiver sends this Signaling to its timing peers
+                        // and expects the same from each of them.
+                        let packet = apple_signaling(clock_id, second_seq);
+                        send_ptp(general, &packet, (*peer, 320).into(), s, "signaling");
                         let mut req = header(1, 44, clock_id, seq, 0x0408, 0);
                         let sent = clock.now_ns();
                         timestamp(&mut req[34..44], sent);
@@ -1527,34 +1620,16 @@ fn ptp_loop(
                     }
                     continue;
                 }
+                // Sender clock: what an iOS grandmaster sends its timing peers.
+                if second {
+                    let packet = announce(clock_id, second_seq);
+                    send_ptp(general, &packet, (*peer, 320).into(), s, "announce");
+                    let packet = apple_signaling(clock_id, second_seq);
+                    send_ptp(general, &packet, (*peer, 320).into(), s, "signaling");
+                }
                 let (sync, follow) = sync_pair(clock_id, seq, clock.now_ns());
                 send_ptp(event, &sync, (*peer, 319).into(), s, "sync");
                 send_ptp(general, &follow, (*peer, 320).into(), s, "follow_up");
-                if now.duration_since(last_announce) >= Duration::from_secs(1) {
-                    send_ptp(
-                        general,
-                        &announce(clock_id, seq, clock.now_ns()),
-                        (*peer, 320).into(),
-                        s,
-                        "announce",
-                    );
-                }
-                // BMCA runs once, before RECORD: ask the receiver to announce so we
-                // can compare priority1, with a bounded number of probes. A peer
-                // that never announces simply leaves us as master.
-                if s.bmca.is_none()
-                    && s.bmca_probes < BMCA_PROBE_ATTEMPTS
-                    && s.next_probe.is_none_or(|at| now >= at)
-                {
-                    let probe = subscription(clock_id, None, seq, 11);
-                    if send_ptp(general, &probe, (*peer, 320).into(), s, "subscribe") {
-                        s.bmca_probes += 1;
-                        s.next_probe = Some(now + BMCA_PROBE_INTERVAL);
-                    }
-                }
-            }
-            if now.duration_since(last_announce) >= Duration::from_secs(1) {
-                last_announce = now;
             }
             seq = seq.wrapping_add(1);
             next_sync = now + Duration::from_millis(125);
@@ -1617,14 +1692,33 @@ fn ptp_loop(
                 if !s.active {
                     continue;
                 }
-                // An Announce naming this engine is an echo of a wake, not a restart.
-                let names_us =
-                    s.follow && kind == 11 && n >= 64 && buf[53..61] == clock_id.to_be_bytes();
+                // An Announce naming this engine is the peer accepting (or
+                // echoing) this clock, not the peer restarting its own.
+                let names_us = kind == 11 && n >= 64 && buf[53..61] == clock_id.to_be_bytes();
                 if kind == 11 && !names_us {
                     note_announce_identity(s, &buf[..n], received_at);
                 }
+                if kind == 12 && n >= 44 && buf[34..42] == clock_id.to_be_bytes() {
+                    s.named_by_peer = true;
+                }
+                if !s.follow && kind == 11 {
+                    // Keep what the peer announces while this engine supplies the
+                    // timeline: whether it yielded is the first thing to check
+                    // when a sender-clock session stays silent.
+                    if names_us {
+                        s.wake.announces_naming_us += 1;
+                    } else if let Some(dataset) = parse_announce(&buf[..n]) {
+                        s.bmca = Some(dataset);
+                        s.better_master = dataset.compare(&BmcaDataset::local(clock_id))
+                            == std::cmp::Ordering::Less;
+                    }
+                }
                 if s.follow && [0, 8, 9, 11, 12].contains(&kind) {
                     followed_packet(s, &buf[..n], local_received, received_at, clock_id);
+                }
+                // A quietly followed peer is answered with nothing at all.
+                if s.quiet {
+                    continue;
                 }
                 if kind == 12 {
                     for grant in unicast_grants(&buf[..n], clock_id, request_seq) {
@@ -1737,7 +1831,7 @@ mod tests {
             follow: true,
             ..Default::default()
         };
-        followed_packet(&mut s, &announce(8, 0, 0), 0, now, 7);
+        followed_packet(&mut s, &peer_announce(8, 0), 0, now, 7);
         for seq in 0..3u16 {
             let at = now + Duration::from_millis(u64::from(seq) * 1000);
             let base = 1_000_000_000u64 + u64::from(seq) * 1_000_000_000;
@@ -1761,7 +1855,7 @@ mod tests {
         assert!(s.ready(now + Duration::from_secs(2)));
         assert_eq!(s.offset, Some(1_000_000.0));
         assert_eq!(s.round_trip_ns, Some(200_000.0));
-        let mut bad = announce(8, 0, 0);
+        let mut bad = peer_announce(8, 0);
         bad[4] = 1;
         assert!(!valid_packet(&bad));
         assert!(read_timestamp(&[255; 10]).is_none());
@@ -1773,7 +1867,7 @@ mod tests {
             follow: true,
             ..Default::default()
         };
-        followed_packet(&mut s, &announce(8, 0, 0), 0, now, 7);
+        followed_packet(&mut s, &peer_announce(8, 0), 0, now, 7);
         s.subscriptions[0].push_back(Subscription {
             sequence: 3,
             interval: -3,
@@ -1815,12 +1909,14 @@ mod tests {
     #[test]
     fn announce_dataset_is_parsed_from_the_wire_and_matches_what_we_send() {
         let id = 0x0102030405060708;
-        let packet = announce(id, 7, 0);
+        let packet = announce(id, 7);
         let dataset = parse_announce(&packet).unwrap();
-        // Our own Announce advertises a local oscillator with a lax preference.
-        assert_eq!(dataset.priority1, 96);
-        assert_eq!(dataset.clock_class, 248);
-        assert_eq!(dataset.priority2, 128);
+        // Our own Announce carries the dataset an iOS sender announces.
+        assert_eq!(dataset, BmcaDataset::local(id));
+        assert_eq!(&packet[47..53], &[128, 6, 0x21, 0x43, 0x6a, 128]);
+        assert_eq!(packet[63], 0x20);
+        assert_eq!(&packet[34..46], &[0; 12]);
+        assert_eq!(&packet[64..76], &[0, 8, 0, 8, 1, 2, 3, 4, 5, 6, 7, 8]);
         assert_eq!(dataset.grandmaster, id);
         assert_eq!(dataset.steps_removed, 0);
         // Anything that is not an Announce is rejected rather than misparsed.
@@ -1844,7 +1940,7 @@ mod tests {
         // Equal priority1: a better clock class wins.
         assert_eq!(
             BmcaDataset {
-                clock_class: 6,
+                clock_class: base.clock_class - 1,
                 ..base
             }
             .compare(&base),
@@ -1873,22 +1969,34 @@ mod tests {
         );
     }
     #[test]
-    fn a_receiver_announcing_a_grandmaster_outranks_our_local_clock() {
+    fn the_sender_dataset_outranks_a_homepod_and_other_receivers() {
         let own = BmcaDataset::local(0xaaaa);
-        // A HomePod advertising an Apple grandmaster (priority1 128) loses on the
-        // first field, so it does not get to take the role.
+        // What a HomePod on software 27.2 announces about itself.
         let homepod = BmcaDataset {
-            priority1: 128,
-            clock_class: 6,
-            ..own
+            priority1: 248,
+            clock_class: 248,
+            accuracy: 0x21,
+            variance: 0x436a,
+            priority2: 245,
+            grandmaster: 0x0102_0304_0506_0008,
+            steps_removed: 0,
         };
         assert_eq!(homepod.compare(&own), std::cmp::Ordering::Greater);
-        // A device with a better class and the same priority does.
+        // A receiver with a default local oscillator loses as well.
         let appliance = BmcaDataset {
-            clock_class: 20,
+            priority1: 248,
+            clock_class: 248,
+            accuracy: 0xfe,
+            variance: 0xffff,
             ..own
         };
-        assert_eq!(appliance.compare(&own), std::cmp::Ordering::Less);
+        assert_eq!(appliance.compare(&own), std::cmp::Ordering::Greater);
+        // Only a clock that claims a better priority1 would take the role.
+        let better = BmcaDataset {
+            priority1: OUR_PRIORITY1 - 1,
+            ..homepod
+        };
+        assert_eq!(better.compare(&own), std::cmp::Ordering::Less);
     }
 
     #[test]
@@ -1951,7 +2059,7 @@ mod tests {
         assert_eq!(s.len(), 44);
         assert_eq!(f.len(), 96);
         assert_eq!(&f[34..44], &[0, 0, 0, 0, 0, 1, 13, 251, 56, 210]);
-        assert_eq!(announce(id, 0, 0).len(), 76);
+        assert_eq!(announce(id, 0).len(), 76);
     }
 }
 #[cfg(test)]

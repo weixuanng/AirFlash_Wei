@@ -400,6 +400,79 @@ public sealed class SessionTests
         Assert.Contains(logs, line => line.Contains("clock_role follow") && line.Contains("alac") && line.Contains("44100 Hz"));
     }
 
+    private static (string Timing, bool Follow, string? Strategy) ClockProfile(FakeConnection process)
+    {
+        var profile = process.Commands.Single(c => c.Command == "start").Parameters.GetProperty("peers")[0].GetProperty("profile");
+        return (profile.Text("timing")!, profile.GetProperty("follow_receiver_clock").GetBoolean(), profile.GetProperty("clock_strategy").GetString());
+    }
+
+    [Fact]
+    public async Task StandaloneHomePodIsOfferedEachClockArrangementUntilOneStreams()
+    {
+        var first = new FakeConnection(autoReady: false); var second = new FakeConnection(autoReady: false); var third = new FakeConnection();
+        var logs = new ConcurrentQueue<string>();
+        var plan = new ClockStrategyPlan();
+        await using var controller = new SessionController(new FakeFactory(first, second, third), new FakeAudio(),
+            logs.Enqueue, Fast with { Connect = TimeSpan.FromSeconds(10) }, clockStrategies: plan);
+        var settings = Settings(); settings.ForceReconnect = true;
+        var pod = new Receiver("a", "a", "127.0.0.1") { FollowReceiverClock = true };
+        await controller.StartAsync(pod, settings);
+        foreach (var process in new[] { first, second })
+        {
+            await process.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            process.EmitData(new
+            {
+                @event = "error", code = "clock_not_ready", channel = "clock", host = "127.0.0.1",
+                retryable = true, message = "PTP exchange did not become ready: 127.0.0.1 (waiting_exchanges)."
+            });
+        }
+        await Until(() => controller.Snapshot.State == PlaybackState.Streaming);
+        // The engine supplies the clock first, then follows silently, then as a timing peer.
+        Assert.Equal(("ptp", false, "sender"), ClockProfile(first));
+        Assert.Equal(("auto", true, "follow_quiet"), ClockProfile(second));
+        Assert.Equal(("auto", true, "follow_active"), ClockProfile(third));
+        Assert.Equal(ClockStrategyPlan.FollowActive, plan.Current("a"));
+        // Streaming alone is not proof: the arrangement is kept once the clock has held.
+        Assert.False(plan.IsProven("a"));
+        Assert.Contains(logs, line => line.Contains("Clock strategy: sender", StringComparison.Ordinal));
+        Assert.Contains(logs, line => line.Contains("Clock strategy follow_quiet did not hold (clock_not_ready); next: follow_active", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AFailureThatIsNotTheClockKeepsTheClockArrangement()
+    {
+        var first = new FakeConnection(autoReady: false); var second = new FakeConnection();
+        var plan = new ClockStrategyPlan();
+        await using var controller = new SessionController(new FakeFactory(first, second), new FakeAudio(),
+            timing: Fast with { Connect = TimeSpan.FromSeconds(10) }, clockStrategies: plan);
+        var settings = Settings(); settings.ForceReconnect = true;
+        await controller.StartAsync(new Receiver("a", "a", "127.0.0.1") { FollowReceiverClock = true }, settings);
+        // A network failure says nothing about the clock: the same arrangement is tried again.
+        await first.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        first.EmitData(new { @event = "error", code = "connection_lost", channel = "rtsp", host = "127.0.0.1", retryable = true, message = "Connection lost." });
+        await Until(() => controller.Snapshot.State == PlaybackState.Streaming);
+        Assert.Equal(("ptp", false, "sender"), ClockProfile(second));
+        Assert.Equal(ClockStrategyPlan.Sender, plan.Current("a"));
+    }
+
+    [Fact]
+    public async Task ChosenTimingAndOtherReceiversKeepTheirOneClockArrangement()
+    {
+        var process = new FakeConnection(); var explicitProcess = new FakeConnection();
+        var plan = new ClockStrategyPlan();
+        plan.Failed("a");
+        await using var controller = new SessionController(new FakeFactory(process, explicitProcess), new FakeAudio(), timing: Fast, clockStrategies: plan);
+        // Not a standalone HomePod on software 27: nothing is tried in turn.
+        await controller.StartAsync(Pod(), Settings());
+        await Until(() => controller.Snapshot.State == PlaybackState.Streaming);
+        Assert.Equal(("auto", false, null), ClockProfile(process));
+        // A timing the user picked is used as picked.
+        var settings = Settings(); settings.Options("b").Timing = "follow";
+        await controller.StartAsync(new Receiver("b", "b", "127.0.0.1") { FollowReceiverClock = true }, settings);
+        await explicitProcess.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(("ptp", true, null), ClockProfile(explicitProcess));
+    }
+
     private static Receiver Pod(string id = "a") => new(id, id, "127.0.0.1");
     private static AppSettings Settings() => new() { LatencyMode = "normal", AutoConnectOnDiscover = false, ForceReconnect = false, MasterVolume = 10 };
     private static readonly SessionTiming Fast = new(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), TimeSpan.FromMilliseconds(10));

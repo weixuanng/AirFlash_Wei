@@ -43,6 +43,52 @@ with the receiver model when a `sync`-sourced offset behaves incorrectly.
 An OS error code in `last_send_error` or `last_receive_error` identifies a local
 socket failure. Normal nonblocking polling is not logged as an error.
 
+## Clock strategies on a standalone HomePod (software 27)
+
+No published sender works with every standalone HomePod on HomePod software 27.
+Some play only when the sender supplies the clock, others only when the sender
+follows theirs, and a HomePod mini 2 on 27.2 has refused the arrangement that
+works on a HomePod mini on 27.0. From 0.2.8 a single receiver that has the
+standalone shape (see "Connected but no audio" below) and is left on Automatic
+timing is therefore offered four arrangements in turn, one per connection
+attempt:
+
+| `Clock strategy:` | What the engine does | Taken from |
+| --- | --- | --- |
+| `sender` | Supplies the clock exactly as an iOS sender: Announce with priority1 128, clockClass 6, accuracy 0x21, variance 0x436a and time source GPS once a second, the 106-byte Apple Signaling once a second, Sync/Follow_Up eight times a second, all starting on the session SETUP reply. Ready when the receiver has sent three Delay_Req. | OwnTone (libairptp), Music Assistant |
+| `follow_quiet` | Follows the receiver's clock and sends it no PTP message at all. The offset comes from its Sync/Follow_Up pairs. | Music Assistant's fix for HomePod software 27 |
+| `follow_active` | Follows the receiver as a Mac does: the SETUP names no clock of its own (`SupportsClockPortMatchingOverride` true, no `ClockID`), no SETPEERS is sent, and the engine introduces itself (see the next section) and sends the Apple Signaling once a second. | the `airplay` hex package, airplay2-rs |
+| `follow_peers` | Follows the receiver as releases up to 0.2.7 did (own `ClockID`, SETPEERS, unicast requests, Delay_Req, introduction), now with the Apple Signaling once a second. | upstream AirFlash |
+
+The log has one `Clock strategy: <name>; receiver <id>; attempt <n>` line per
+attempt, and `Clock strategy <name> did not hold (<code>); next: <name>` when the
+clock never became ready (`clock_not_ready`) or was lost within 30 seconds of
+streaming. Other failures, such as a network drop, keep the arrangement. One
+that holds its clock for 30 seconds is saved in
+`%APPDATA%\Airplay\clock-strategy.json` and used first from then on; delete
+that file to start again from `sender`. Choosing PTP or Follow in Receivers
+turns the rotation off and uses that one arrangement.
+
+In the `clock_status` snapshot, `strategy` names the arrangement the engine is
+running, `named_by_peer` is true once the receiver has addressed a Signaling to
+the engine's port identity (it has registered the engine as a timing peer), and
+in the `sender` arrangement `bmca_*` hold what the receiver still announces and
+`announces_naming_us` counts Announces in which it named the engine as
+grandmaster. A `sender` attempt that ends in `waiting_exchanges` with
+`received_by_type[1]` (Delay_Req) at 0 means the receiver never followed the
+engine's clock.
+
+A single delay response that disagrees with the running offset by more than 5 ms
+(`last_rejection` `offset_jump`) no longer ends a followed session: the delay
+refinement is dropped and the Sync/Follow_Up estimate carries the timeline.
+Before 0.2.8 that one sample reset the association and was reported as
+"PTP exchanges stopped". A delay response whose offset is more than 10 ms above
+the Sync/Follow_Up estimate (`delay_disagrees_with_sync`, an apparent round trip
+of more than about 20 ms) is refused as well: a
+HomePod's delay timestamps can sit a tenth of a second from its own Sync
+timestamps and still pass the round-trip gate, and using one moves the audio
+anchor by half that error.
+
 ## A followed receiver announces but never syncs
 
 `waiting_sync_pair` with many Announce (type 11) and Signaling (type 12)
@@ -52,7 +98,10 @@ A HomePod on software 27.2 does this to a sender that never takes part in PTP
 as a clock; it does not answer the unicast subscription requests, and HomePods
 do not answer a Delay_Req that carries a real clock identity.
 
-From 0.2.7 the engine uses two remedies taken from working implementations:
+From 0.2.7 the engine uses two remedies taken from working implementations.
+They did not start the clock of a HomePod mini 2 on 27.2, which is why 0.2.8
+tries the arrangements above in turn; the remedies remain part of
+`follow_active` and of a Follow timing chosen by hand:
 
 1. **Introduction**, sent as soon as SETPEERS is accepted. It is what a Mac
    sends when it joins as a clock that will follow: three Sync/Follow_Up pairs
