@@ -1975,7 +1975,7 @@ mod tests {
             accuracy: 0x21,
             variance: 0x436a,
             priority2: 245,
-            grandmaster: 0x70f9_4a60_2bb2_0008,
+            grandmaster: 0x0102_0304_0506_0008,
             steps_removed: 0,
         };
         assert_eq!(homepod.compare(&own), std::cmp::Ordering::Greater);
