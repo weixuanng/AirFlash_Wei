@@ -4,7 +4,9 @@ using System.Threading.Tasks;
 namespace AirFlash.Core;
 
 /// <summary>What the receiver should show right now.</summary>
-public sealed record NowPlaying(string Title, string Artist, string Album, string Genre, bool Playing, long DurationMs, long PositionMs)
+/// <param name="ArtworkPath">A JPEG file with the track's artwork, or empty. A HomePod
+/// takes its Sound Glow colours from it.</param>
+public sealed record NowPlaying(string Title, string Artist, string Album, string Genre, bool Playing, long DurationMs, long PositionMs, string ArtworkPath = "")
 {
     public bool IsEmpty => Title.Length == 0 && Artist.Length == 0 && Album.Length == 0;
     /// <summary>Display delay of a poll that lands between two updates of the same
@@ -72,11 +74,14 @@ public sealed class NowPlayingPump(INowPlayingSource source, Func<long>? clock =
     private static bool SameTrackState(NowPlaying left, NowPlaying right)
         => left.Title == right.Title && left.Artist == right.Artist
         && left.Album == right.Album && left.Genre == right.Genre
-        && left.Playing == right.Playing && left.DurationMs == right.DurationMs;
+        && left.Playing == right.Playing && left.DurationMs == right.DurationMs
+        && left.ArtworkPath == right.ArtworkPath;
     private bool ShouldPublish(NowPlaying sample)
     {
         if (_lastPublished is not { } last) return true;
         if (last.Title != sample.Title || last.Artist != sample.Artist || last.Album != sample.Album || last.Genre != sample.Genre) return true;
+        // Players publish the artwork a moment after the title.
+        if (last.ArtworkPath != sample.ArtworkPath) return true;
         if (last.Playing != sample.Playing) return true;
         if (Math.Abs(last.DurationMs - sample.DurationMs) > 0) return true;
         // Position only counts once the receiver's interpolation would drift visibly.

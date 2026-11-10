@@ -10,9 +10,11 @@
 //! - `application/x-dmap-tagged` with a `mlit` item holding `minm` (title),
 //!   `asar` (artist), `asal` (album) and `asgn` (genre).
 //!
-//! Artwork is deliberately not sent yet: the receiver accepts `image/jpeg`, but we
-//! cannot verify the size/format constraints without a device, and a rejected
-//! artwork request must never interfere with audio.
+//! Artwork goes out as a third `SET_PARAMETER` with `image/jpeg`, once per image.
+//! A HomePod takes its Sound Glow colours from the artwork of what is playing.
+//! The desktop hands the JPEG over as a file path, because an image does not fit
+//! in an IPC line. A receiver that rejects the request gets no more artwork for
+//! the session, so a refusal never costs more than one request.
 
 use crate::rtsp::{Cancellation, Connection};
 use anyhow::{Result, ensure};
@@ -42,11 +44,33 @@ pub struct NowPlaying {
     /// Paused tracks still show their tags; the progress bar is what stops.
     #[serde(default = "playing_default")]
     pub playing: bool,
+    /// A JPEG file with the track's artwork, or empty.
+    #[serde(default)]
+    pub artwork_path: String,
+    /// The bytes of that file, loaded by [`NowPlaying::load_artwork`].
+    #[serde(skip)]
+    pub artwork: Option<Arc<Vec<u8>>>,
 }
+/// Larger than any thumbnail the desktop produces; a guard, not a target.
+pub const ARTWORK_LIMIT: u64 = 1024 * 1024;
 fn playing_default() -> bool {
     true
 }
 impl NowPlaying {
+    /// Read `artwork_path`. Anything that is not a JPEG of a sane size is left
+    /// out and reported; the tags still go out without it.
+    pub fn load_artwork(&mut self) -> Result<()> {
+        self.artwork = None;
+        if self.artwork_path.is_empty() {
+            return Ok(());
+        }
+        let size = std::fs::metadata(&self.artwork_path)?.len();
+        ensure!(size <= ARTWORK_LIMIT, "artwork is too large ({size} bytes)");
+        let bytes = std::fs::read(&self.artwork_path)?;
+        ensure!(is_jpeg(&bytes), "artwork is not a JPEG image");
+        self.artwork = Some(Arc::new(bytes));
+        Ok(())
+    }
     /// Nothing to show: the receiver keeps its previous display, which is what
     /// Apple senders do when the source goes away.
     pub fn is_empty(&self) -> bool {
@@ -67,6 +91,11 @@ impl NowPlaying {
         };
         format!("progress: {start}/{current}/{end}\r\n")
     }
+}
+
+/// Start-of-image and end-of-image markers of a complete JPEG.
+pub fn is_jpeg(bytes: &[u8]) -> bool {
+    bytes.len() > 4 && bytes.starts_with(&[0xff, 0xd8, 0xff]) && bytes.ends_with(&[0xff, 0xd9])
 }
 
 /// DMAP is a flat TLV format: four ASCII bytes of tag, a big-endian byte length,
@@ -172,6 +201,8 @@ impl Worker {
                 let mut tags_sent: Vec<Option<Vec<u8>>> = vec![None; peers.len()];
                 let mut progress_enabled = vec![true; peers.len()];
                 let mut tags_enabled = vec![true; peers.len()];
+                let mut artwork_sent: Vec<Option<Arc<Vec<u8>>>> = vec![None; peers.len()];
+                let mut artwork_enabled = vec![true; peers.len()];
                 while !done.is_cancelled() {
                     let Some((sequence, now, sampled)) = control.latest() else {
                         thread::sleep(Duration::from_millis(100));
@@ -186,6 +217,7 @@ impl Worker {
                     }
                     let mut errors = Vec::new();
                     let mut tags_updated = false;
+                    let mut artwork_updated = false;
                     for (index, (host, uri, connection)) in peers.iter().enumerate() {
                         if done.is_cancelled() {
                             return;
@@ -219,7 +251,10 @@ impl Worker {
                             if let Err(error) = connection.request(
                                 "SET_PARAMETER",
                                 uri,
-                                &[("Content-Type", "application/x-dmap-tagged".into()), stamp],
+                                &[
+                                    ("Content-Type", "application/x-dmap-tagged".into()),
+                                    stamp.clone(),
+                                ],
                                 &tags,
                             ) {
                                 errors.push(format!("{host}: tags: {error:#}"));
@@ -227,6 +262,22 @@ impl Worker {
                             } else {
                                 tags_sent[index] = Some(tags);
                                 tags_updated = true;
+                            }
+                        }
+                        if let Some(artwork) = now.artwork.as_ref().filter(|artwork| {
+                            artwork_enabled[index] && artwork_sent[index].as_ref() != Some(*artwork)
+                        }) {
+                            if let Err(error) = connection.request(
+                                "SET_PARAMETER",
+                                uri,
+                                &[("Content-Type", "image/jpeg".into()), stamp],
+                                artwork,
+                            ) {
+                                errors.push(format!("{host}: artwork: {error:#}"));
+                                artwork_enabled[index] = false;
+                            } else {
+                                artwork_sent[index] = Some(artwork.clone());
+                                artwork_updated = true;
                             }
                         }
                     }
@@ -239,6 +290,8 @@ impl Worker {
                         "duration_ms": now.duration_ms,
                         "playing": now.playing,
                         "tags_updated": tags_updated,
+                        "artwork_updated": artwork_updated,
+                        "artwork_bytes": now.artwork.as_ref().map_or(0, |a| a.len()),
                         "message": errors.join("; "),
                     }));
                     last = Some((sequence, now, Instant::now()));
@@ -273,9 +326,48 @@ mod tests {
             duration_ms: 240_000,
             position_ms: 42_000,
             playing: true,
+            ..NowPlaying::default()
         }
     }
 
+    #[test]
+    fn artwork_is_loaded_only_from_a_complete_jpeg_of_a_sane_size() {
+        let dir = std::env::temp_dir().join(format!("airflash-artwork-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let jpeg = [0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 0xff, 0xd9];
+        assert!(is_jpeg(&jpeg));
+        assert!(!is_jpeg(&jpeg[..7]), "a truncated image is not sent");
+        assert!(!is_jpeg(b"\x89PNG\r\n\x1a\n"));
+        let path = |name: &str, bytes: &[u8]| {
+            let path = dir.join(name);
+            std::fs::write(&path, bytes).unwrap();
+            path.to_string_lossy().into_owned()
+        };
+        let mut now = NowPlaying {
+            title: "Song".into(),
+            artwork_path: path("good.jpg", &jpeg),
+            ..NowPlaying::default()
+        };
+        now.load_artwork().unwrap();
+        assert_eq!(now.artwork.as_deref().map(Vec::as_slice), Some(&jpeg[..]));
+        // No path is not an error, and clears what an earlier load left.
+        now.artwork_path.clear();
+        now.load_artwork().unwrap();
+        assert!(now.artwork.is_none());
+        for bad in [
+            path("bad.jpg", b"not an image"),
+            path("big.jpg", &vec![0xff; ARTWORK_LIMIT as usize + 1]),
+            dir.join("missing.jpg").to_string_lossy().into_owned(),
+        ] {
+            now.artwork_path = bad;
+            assert!(now.load_artwork().is_err());
+            assert!(now.artwork.is_none());
+        }
+        // The file path is not part of what the desktop may omit.
+        let parsed: NowPlaying = serde_json::from_str(r#"{"title":"Song"}"#).unwrap();
+        assert!(parsed.artwork_path.is_empty() && parsed.artwork.is_none());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
     #[test]
     fn dmap_items_are_tagged_length_prefixed_and_nested_in_mlit() {
         let bytes = dmap_tags(&sample());
