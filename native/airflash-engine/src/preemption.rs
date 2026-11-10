@@ -1632,7 +1632,7 @@ mod tests {
             0x0000_0100,
             0x8000_0000,
             0x0000_1000_0000,
-            u64::from(u32::MAX) & !RECEIVER_SESSION_ACTIVE,
+            u64::from(u32::MAX) & !(RECEIVER_SESSION_ACTIVE | RECEIVER_PLAYING),
         ] {
             for we_hold_session in [false, true] {
                 assert_eq!(
@@ -1793,12 +1793,12 @@ mod tests {
     #[test]
     fn raw_status_flags_survive_parsing_for_the_device_mapping() {
         let mut info = plist::Dictionary::new();
-        info.insert("statusFlags".into(), Value::Integer(0x1234_5678.into()));
+        info.insert("statusFlags".into(), Value::Integer(0x1204_5678.into()));
         assert_eq!(
             report_from_info(&Value::Dictionary(info), false),
             ProbeReport {
                 outcome: ProbeOutcome::Free,
-                status_flags: Some(0x1234_5678)
+                status_flags: Some(0x1204_5678)
             }
         );
         // The field is a 64-bit `ulong`: a high bit is preserved in the log and
