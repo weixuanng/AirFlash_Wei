@@ -30,19 +30,20 @@ public partial class ControlPanel : Window
         var slider = (System.Windows.Controls.Slider)sender;
         var radius = slider.ActualHeight / 2;
         slider.Clip = new System.Windows.Media.RectangleGeometry(new Rect(0, 0, slider.ActualWidth, slider.ActualHeight), radius, radius);
-        FillVolume(slider);
+        FillVolume(slider, animate: false); // a resize is not a change of level
     }
     private void VolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => FillVolume((System.Windows.Controls.Slider)sender);
-    private void VolumeSlider_Loaded(object sender, RoutedEventArgs e) => FillVolume((System.Windows.Controls.Slider)sender);
+    private void VolumeSlider_Loaded(object sender, RoutedEventArgs e) => FillVolume((System.Windows.Controls.Slider)sender, animate: false);
     /// <summary>The filled part of the pill, as wide as the level.</summary>
-    internal static void FillVolume(System.Windows.Controls.Slider slider)
+    internal static void FillVolume(System.Windows.Controls.Slider slider, bool animate = true)
     {
         slider.ApplyTemplate();
         if (slider.Template?.FindName("PART_Fill", slider) is not FrameworkElement fill) return;
         var range = slider.Maximum - slider.Minimum;
         var fraction = range > 0 ? Math.Clamp((slider.Value - slider.Minimum) / range, 0, 1) : 0;
         // Never narrower than the rounded end, or a low level is clipped away.
-        fill.Width = fraction > 0 ? Math.Max(slider.ActualHeight, slider.ActualWidth * fraction) : 0;
+        // The fill follows on a short spring, so a drag or a key press reads as one motion.
+        Motion.Glide(fill, WidthProperty, fraction > 0 ? Math.Max(slider.ActualHeight, slider.ActualWidth * fraction) : 0, animate);
     }
     private static void SetVolumeFromPointer(System.Windows.Controls.Slider slider, MouseEventArgs e)
     {
@@ -83,20 +84,75 @@ public partial class ControlPanel : Window
         InitializeComponent(); _viewModel = viewModel; DataContext = viewModel; WindowThemeService.Track(this); AppIconService.Track(this);
         viewModel.Receivers.CollectionChanged += OnReceiversChanged;
         IsVisibleChanged += (_, _) => viewModel.SetPanelVisible(IsVisible);
-        SizeChanged += (_, _) => { if (!_placing) RequestPlacement(); };
-        DpiChanged += (_, _) => RequestPlacement();
+        SizeChanged += (_, _) => { if (!_placing) RequestPlacement(); if (_blurred) PanelBackdrop.Resize(this, CardRadius); };
+        viewModel.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName != nameof(AppViewModel.PanelBlurEnabled)) return;
+            if (viewModel.PanelBlurEnabled) BlurOn(); else BlurOff();
+        };
+        // Not before the entrance spring has settled: the blur covers the whole window, so an
+        // earlier start would show a rim of blur around the still-growing card.
+        _blurTimer = new(DispatcherPriority.Background, Dispatcher) { Interval = Motion.Spring };
+        _blurTimer.Tick += (_, _) => { _blurTimer.Stop(); BlurOn(); };
+        DpiChanged += (_, _) => { RequestPlacement(); if (_blurred) Dispatcher.BeginInvoke(() => { if (_blurred) PanelBackdrop.Resize(this, CardRadius); }, DispatcherPriority.Loaded); };
+    }
+    // ---- Blur. Windows blurs the whole window rectangle, so it is switched on only
+    // once the card has grown to fill it, and off before the card shrinks away.
+    // Until then, and whenever Windows refuses, a solid backing keeps the old look.
+    private const double CardRadius = 18;
+    private readonly DispatcherTimer _blurTimer;
+    private bool _blurred, _entering, _leaving;
+    private void BlurOn()
+    {
+        if (_blurred || _leaving || !IsVisible || !_viewModel.PanelBlurEnabled || !PanelBackdrop.Apply(this, CardRadius)) return;
+        _blurred = true;
+        if (Motion.Active) Backing.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, TimeSpan.FromMilliseconds(220)));
+        else Backing.Opacity = 0;
+    }
+    private void BlurOff()
+    {
+        _blurTimer.Stop();
+        if (!_blurred) return;
+        _blurred = false;
+        Backing.BeginAnimation(OpacityProperty, null); Backing.Opacity = 1;
+        PanelBackdrop.Remove(this);
+    }
+    /// <summary>Where the panel was opened from, as a fraction of its own size: the
+    /// pointer when it is on or beside the panel (a tray click), else the taskbar edge.</summary>
+    private Point? OpenedFrom()
+    {
+        if (ActualWidth <= 0 || ActualHeight <= 0 || PresentationSource.FromVisual(this) is null) return null;
+        var pointer = PointFromScreen(NativeWindowPlacement.Cursor());
+        var (x, y) = (pointer.X / ActualWidth, pointer.Y / ActualHeight);
+        return x is < -0.6 or > 1.6 || y is < -0.6 or > 1.6 ? null : new(Math.Clamp(x, 0, 1), Math.Clamp(y, 0, 1));
+    }
+    /// <summary>Close the panel: it shrinks back to where it opened from, then hides.</summary>
+    public void Dismiss()
+    {
+        if (!IsVisible || _leaving) return;
+        _entering = false;
+        BlurOff();
+        _leaving = true;
+        Motion.LeavePanel(Card, () => { if (!_leaving) return false; _leaving = false; Hide(); return true; });
     }
     public void ToggleFromTray()
     {
-        if (IsVisible) Hide();
+        if (IsVisible) Dismiss();
         else if (DateTime.UtcNow - _lastDismissed > TimeSpan.FromMilliseconds(240)) ShowPanel();
     }
     public void ShowPanel()
     {
         Width = CompactWidth;
-        var opening = !IsVisible;
+        // Reopened while shrinking away: that exit no longer hides the panel.
+        var opening = !IsVisible || _leaving;
+        _leaving = false;
+        if (opening)
+        {
+            // Unseen until it has been placed; the entrance starts from there.
+            _entering = true;
+            Card.BeginAnimation(OpacityProperty, null); Card.Opacity = Motion.Active ? 0 : 1;
+        }
         Show(); RequestPlacement(); Activate();
-        if (opening) Motion.EnterPanel(Card);
     }
     public void RequestPlacement()
     {
@@ -121,11 +177,21 @@ public partial class ControlPanel : Window
             // Never reuse a width fed back by a native resize or a DPI transition.
             NativeWindowPlacement.Place(this, area, CompactWidth, ActualHeight);
         }
-        finally { _placing = false; }
+        finally
+        {
+            _placing = false;
+            // In the finally: a failed placement must still leave a visible panel.
+            if (_entering)
+            {
+                _entering = false;
+                Motion.EnterPanel(Card, OpenedFrom());
+                if (Motion.Active) _blurTimer.Start(); else BlurOn();
+            }
+        }
     }
     private void OnDeactivated(object sender, EventArgs args)
     {
-        Dispatcher.BeginInvoke(() => { if (!IsActive && !MenuOpen) { _lastDismissed = DateTime.UtcNow; Hide(); } }, DispatcherPriority.Background);
+        Dispatcher.BeginInvoke(() => { if (!IsActive && !MenuOpen) { _lastDismissed = DateTime.UtcNow; Dismiss(); } }, DispatcherPriority.Background);
     }
     private void OnActionHintUpdated(object sender, DataTransferEventArgs args)
     {
@@ -137,15 +203,15 @@ public partial class ControlPanel : Window
                     .RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
         }, DispatcherPriority.Loaded);
     }
-    private void OnKeyDown(object sender, KeyEventArgs args) { if (args.Key == Key.Escape) { Hide(); args.Handled = true; } }
-    private void OnClosing(object? sender, CancelEventArgs args) { if (!_allowClose) { args.Cancel = true; Hide(); } }
+    private void OnKeyDown(object sender, KeyEventArgs args) { if (args.Key == Key.Escape) { Dismiss(); args.Handled = true; } }
+    private void OnClosing(object? sender, CancelEventArgs args) { if (!_allowClose) { args.Cancel = true; Dismiss(); } }
     private void OnQuit(object sender, RoutedEventArgs args) => QuitRequested?.Invoke();
     private void OnReceiversChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs args)
         => RequestPlacement();
     public void ShutdownPanel()
     {
         _viewModel.Receivers.CollectionChanged -= OnReceiversChanged;
-        _placement?.Abort();
+        _placement?.Abort(); _blurTimer.Stop(); _leaving = false;
         _allowClose = true; Close();
     }
 }

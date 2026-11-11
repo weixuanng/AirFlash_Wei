@@ -34,6 +34,12 @@ internal sealed class AdaptiveLatency(TimeProvider clock)
     private long? _observeFrom, _healthySince, _lastRecovery, _lastTrouble;
     private double? _lastUptime, _negotiatedBase;
     private long? _lastUnderruns;
+    // Loss the speaker reports. The sender's own timing can be perfect while Wi-Fi
+    // drops packets, so this is the only sign that a longer delay would help: it
+    // gives a resend time to arrive before the audio is due.
+    private LinkTotals? _lastLink;
+    private bool _lossTrouble;
+    private readonly Queue<(bool Late, bool Heavy)> _loss = new();
     private int _underrunStreak;
     private string? _trouble;
     private AdaptiveAction? _restart;
@@ -83,6 +89,7 @@ internal sealed class AdaptiveLatency(TimeProvider clock)
         _lastUptime = null; _lastUnderruns = null; _healthySince = null; _lastRecovery = null;
         _skipMetrics = false;
         _lastTrouble = null;
+        _lastLink = null; _loss.Clear(); _lossTrouble = false;
     }
     public bool Accept(LatencyRuntime runtime)
     {
@@ -112,7 +119,7 @@ internal sealed class AdaptiveLatency(TimeProvider clock)
         var now = clock.GetTimestamp(); _lastRecovery = now; _healthySince = null;
         while (_recoveries.TryPeek(out var at) && clock.GetElapsedTime(at, now) > TimeSpan.FromSeconds(60)) _recoveries.Dequeue();
         _recoveries.Enqueue(now);
-        if (_recoveries.Count >= 3) { _trouble = "repeated recoveries"; _lastTrouble = now; }
+        if (_recoveries.Count >= 3) { _trouble = "repeated recoveries"; _lossTrouble = false; _lastTrouble = now; }
     }
     public bool Observe(TransportMetrics metrics)
     {
@@ -123,13 +130,26 @@ internal sealed class AdaptiveLatency(TimeProvider clock)
         _lastUptime = uptime;
         var delta = metrics.UnderrunsActive is { } count && _lastUnderruns is { } old && count >= old ? count - old : (long?)null;
         _lastUnderruns = metrics.UnderrunsActive;
-        if (gap) { _lateness.Reset(); _underrunStreak = 0; _healthySince = null; }
+        var link = LinkTotals.From(metrics);
+        var loss = link is { } totals && _lastLink is { } earlier ? totals.Since(earlier) : null;
+        _lastLink = link;
+        if (gap) { _lateness.Reset(); _underrunStreak = 0; _healthySince = null; _loss.Clear(); }
         if (_skipMetrics) { _skipMetrics = false; return true; }
-        if (_lateness.Observe(metrics.IntervalLatenessP99Ms)) { _trouble = "sustained p99 lateness"; _lastTrouble = clock.GetTimestamp(); }
+        if (loss is { Sent: > 0 } lost)
+        {
+            _loss.Enqueue((lost.Late > 0, lost.Resent + lost.Late >= lost.Sent * 0.02));
+            while (_loss.Count > 10) _loss.Dequeue();
+            // Three seconds in ten with a resend that came too late, or half the
+            // window losing 2 % or more: one bad second alone is not a reason.
+            var reason = _loss.Count(s => s.Late) >= 3 ? "resent audio arrived too late"
+                : _loss.Count(s => s.Heavy) >= 5 ? "sustained packet loss" : null;
+            if (reason is not null) { _trouble = reason; _lossTrouble = true; _lastTrouble = clock.GetTimestamp(); _loss.Clear(); }
+        }
+        if (_lateness.Observe(metrics.IntervalLatenessP99Ms)) { _trouble = "sustained p99 lateness"; _lossTrouble = false; _lastTrouble = clock.GetTimestamp(); }
         _underrunStreak = delta > 0 ? _underrunStreak + 1 : 0;
-        if (_underrunStreak >= 3) { _trouble = "sustained active-audio underruns"; _lastTrouble = clock.GetTimestamp(); }
+        if (_underrunStreak >= 3) { _trouble = "sustained active-audio underruns"; _lossTrouble = false; _lastTrouble = clock.GetTimestamp(); }
         var now = clock.GetTimestamp();
-        var healthy = delta == 0 && metrics.IntervalLatenessP99Ms is >= 0 and < 3
+        var healthy = delta == 0 && loss is not { Late: > 0 } && metrics.IntervalLatenessP99Ms is >= 0 and < 3
             && (_lastRecovery is null || clock.GetElapsedTime(_lastRecovery.Value, now) >= TimeSpan.FromSeconds(2));
         if (!healthy) _healthySince = null;
         else
@@ -149,10 +169,15 @@ internal sealed class AdaptiveLatency(TimeProvider clock)
             _restart = new(true, pending.Action.Target, "lead confirmation timed out");
         }
         if (_restart is { } restart) { _restart = null; RecoveryTarget = restart.Target; return restart; }
-        if (_lastTrouble is { } troubleAt && clock.GetElapsedTime(troubleAt) > TimeSpan.FromSeconds(3)) _trouble = null;
+        if (_lastTrouble is { } troubleAt && clock.GetElapsedTime(troubleAt) > TimeSpan.FromSeconds(3)) { _trouble = null; _lossTrouble = false; }
         if (_trouble is not { } reason || _observeFrom is { } at && clock.GetElapsedTime(at) < TimeSpan.FromSeconds(10)) return null;
         var target = Math.Max(Current, LatencyPolicy.Next(Current, plan, true));
         _trouble = null;
+        var fromLoss = _lossTrouble; _lossTrouble = false;
+        // Loss with no longer delay left to try is the network's to fix. Rebuilding
+        // the stream would not help, and on a link that stays lossy it would repeat
+        // until playback was stopped for good.
+        if (fromLoss && target <= Current) return null;
         var extra = Runtime is { } runtime ? (int)Math.Round(target - runtime.BaselineMs) : 0;
         if (target <= Current || !confirmedLeadSupported || Runtime is not { LiveSupported: true }
             || extra <= 0 || extra > Runtime.CeilingMs)

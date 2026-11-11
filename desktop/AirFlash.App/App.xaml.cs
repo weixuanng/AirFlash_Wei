@@ -49,7 +49,7 @@ public partial class App : Application
             ? new[] { args.Args[languageIndex + 1] } : null;
         // Verification runs measure final layout; cosmetic entrance motion would
         // leave rows mid-animation (render offset, partial opacity) during checks.
-        if (Program.NeedsDiagnosticIsolation(args.Args)) Motion.Enabled = false;
+        if (Program.NeedsDiagnosticIsolation(args.Args)) { Motion.Enabled = false; PanelBackdrop.Enabled = false; }
         else Motion.MatchDisplayRefreshRate();
         try
         {

@@ -83,6 +83,8 @@ public sealed class ThemeService : IDisposable
         var light = palette.IsDark ? Colors.White : Colors.White;
         var body = palette.Canvas;
         SetGradient("GlassBrush", (WithAlpha(Lift(body, palette.IsDark ? 22 : 0), 0xD9), 0), (WithAlpha(body, 0xD9), 0.45), (WithAlpha(body, 0xE6), 1));
+        // What the card is tinted with once Windows is blurring what lies behind it.
+        SetGradient("GlassClearBrush", (WithAlpha(Lift(body, palette.IsDark ? 22 : 0), 0x8C), 0), (WithAlpha(body, 0x99), 0.45), (WithAlpha(body, 0xAD), 1));
         SetGradient("GlassEdgeBrush", (WithAlpha(light, palette.IsDark ? (byte)0x66 : (byte)0xF2), 0), (WithAlpha(light, palette.IsDark ? (byte)0x1A : (byte)0x99), 0.5), (WithAlpha(light, palette.IsDark ? (byte)0x33 : (byte)0xCC), 1));
         SetGradient("GlassCardBrush", (WithAlpha(light, palette.IsDark ? (byte)0x1F : (byte)0xB8), 0), (WithAlpha(light, palette.IsDark ? (byte)0x0F : (byte)0x8C), 1));
         SetGradient("GlassActiveBrush", (WithAlpha(palette.Accent, palette.IsDark ? (byte)0x57 : (byte)0x38), 0), (WithAlpha(palette.Accent, palette.IsDark ? (byte)0x2E : (byte)0x1F), 1));

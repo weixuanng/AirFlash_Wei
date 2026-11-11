@@ -6,6 +6,7 @@ internal sealed class PanelPreferences
 {
     private static string Path => System.IO.Path.Combine(AppPaths.DataDirectory, "panel.json");
     public bool VolumeKeys { get; set; } = true;
+    public bool Blur { get; set; } = true;
     public static PanelPreferences Load()
     {
         try { return File.Exists(Path) ? JsonSerializer.Deserialize<PanelPreferences>(File.ReadAllText(Path)) ?? new() : new(); }
