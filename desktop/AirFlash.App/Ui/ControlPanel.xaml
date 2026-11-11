@@ -57,7 +57,7 @@
       </Setter>
     </Style>
   </Window.Resources>
-  <Border x:Name="Card" BorderBrush="{DynamicResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="18" Padding="14" Background="{DynamicResource GlassBrush}">
+  <Border x:Name="Card" BorderBrush="{DynamicResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="18" Padding="14" Background="{DynamicResource GlassClearBrush}">
     <Grid>
       <Grid.RowDefinitions>
         <RowDefinition Height="Auto"/>
@@ -65,6 +65,8 @@
         <RowDefinition Height="*"/>
         <RowDefinition Height="Auto"/>
       </Grid.RowDefinitions>
+      <!-- Solid glass over the clear tint. It fades out once Windows is blurring what is behind the panel. -->
+      <Border x:Name="Backing" Grid.RowSpan="9" Margin="-14" CornerRadius="17" Background="{DynamicResource GlassBrush}" IsHitTestVisible="False"/>
       <Border Grid.RowSpan="9" Margin="-14,-14,-14,0" Height="120" VerticalAlignment="Top" CornerRadius="17,17,0,0" Background="{DynamicResource GlassSheenBrush}" IsHitTestVisible="False"/>
       <Grid Margin="2,0,0,12">
         <Grid.ColumnDefinitions>
@@ -146,6 +148,35 @@
                         <!-- The one sign of a live connection: a green dot on the speaker in use. -->
                         <Ellipse x:Name="ConnectedDot" Width="7" Height="7" Margin="0,0,6,4" VerticalAlignment="Center" Fill="{DynamicResource SuccessBrush}" Visibility="{Binding IsStreaming, Converter={StaticResource BoolVisibility}}"/>
                         <TextBlock Text="{Binding StateText, NotifyOnTargetUpdated=True}" Style="{StaticResource Hint}" loc:Motion.FadeOnUpdate="True"/>
+                        <!-- Signal mark: three bars for a clean link, fewer and amber when the speaker keeps asking for audio again. -->
+                        <StackPanel x:Name="SignalMark" Orientation="Horizontal" Height="10" Margin="7,0,0,3" VerticalAlignment="Center" Background="Transparent" ToolTip="{Binding QualityText}">
+                          <StackPanel.Resources>
+                            <Style TargetType="Rectangle">
+                              <Setter Property="Width" Value="2.5"/>
+                              <Setter Property="RadiusX" Value="1"/>
+                              <Setter Property="RadiusY" Value="1"/>
+                              <Setter Property="Margin" Value="0,0,1.5,0"/>
+                              <Setter Property="VerticalAlignment" Value="Bottom"/>
+                              <Setter Property="Fill" Value="{DynamicResource MutedBrush}"/>
+                              <Style.Triggers>
+                                <DataTrigger Binding="{Binding Quality}" Value="2"><Setter Property="Fill" Value="{DynamicResource WarningBrush}"/></DataTrigger>
+                                <DataTrigger Binding="{Binding Quality}" Value="1"><Setter Property="Fill" Value="{DynamicResource WarningBrush}"/></DataTrigger>
+                              </Style.Triggers>
+                            </Style>
+                          </StackPanel.Resources>
+                          <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                              <Style.Triggers><DataTrigger Binding="{Binding Quality}" Value="0"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers>
+                            </Style>
+                          </StackPanel.Style>
+                          <Rectangle Height="4"/>
+                          <Rectangle Height="7">
+                            <Rectangle.Style><Style TargetType="Rectangle" BasedOn="{StaticResource {x:Type Rectangle}}"><Style.Triggers><DataTrigger Binding="{Binding Quality}" Value="1"><Setter Property="Opacity" Value="0.28"/></DataTrigger></Style.Triggers></Style></Rectangle.Style>
+                          </Rectangle>
+                          <Rectangle Height="10">
+                            <Rectangle.Style><Style TargetType="Rectangle" BasedOn="{StaticResource {x:Type Rectangle}}"><Style.Triggers><DataTrigger Binding="{Binding Quality}" Value="1"><Setter Property="Opacity" Value="0.28"/></DataTrigger><DataTrigger Binding="{Binding Quality}" Value="2"><Setter Property="Opacity" Value="0.28"/></DataTrigger></Style.Triggers></Style></Rectangle.Style>
+                          </Rectangle>
+                        </StackPanel>
                       </StackPanel>
                     </StackPanel>
                     <!-- Now-playing level bars; they only animate while shown and streaming. -->
@@ -214,6 +245,7 @@
               <ComboBoxItem Content="{loc:Text 'Most stable'}"/>
             </ComboBox>
           </Grid>
+          <CheckBox x:Name="BlurOption" IsChecked="{Binding PanelBlurEnabled, Mode=TwoWay}" Content="{loc:Text 'Blur what is behind the panel'}" ToolTip="{loc:Text 'Shows a blurred view of the screen through the panel. Turn it off if the panel looks wrong.'}" Margin="0,0,0,6"/>
           <CheckBox x:Name="VolumeKeysOption" IsChecked="{Binding VolumeKeysEnabled, Mode=TwoWay}" Content="{loc:Text 'Volume keys control the speaker'}" ToolTip="{loc:Text 'While connected, the keyboard volume keys change the speaker instead of this PC.'}" Margin="0,0,0,6"/>
           <CheckBox x:Name="DirectCaptureOption" IsChecked="{Binding DirectCapture, Mode=TwoWay}" IsEnabled="{Binding DirectCaptureAvailable}" Content="{loc:Text 'Capture apps directly'}" ToolTip="{loc:Text 'Takes audio from apps before the PC speakers, so the PC can stay muted. Turn off if the speaker goes silent.'}"/>
         </StackPanel>

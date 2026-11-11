@@ -51,6 +51,10 @@ public static class Motion
     // No overshoot: for a level that must never read past its target.
     private static readonly SpringEase Smooth = new(0.35, 0);
     internal static readonly TimeSpan SmoothTime = Smooth.Settle;
+    // Fast enough to stay under a dragging pointer without lagging behind it.
+    private static readonly SpringEase Quick = new(0.18, 0);
+    internal static readonly TimeSpan QuickTime = Quick.Settle;
+    internal static readonly IEasingFunction QuickCurve = Frozen(Quick);
     internal static readonly IEasingFunction SmoothCurve = Frozen(Smooth);
     internal static readonly TimeSpan Spring = Snappy.Settle;
     private static readonly TimeSpan Fade = TimeSpan.FromMilliseconds(200);
@@ -128,15 +132,60 @@ public static class Motion
         scale.BeginAnimation(ScaleTransform.ScaleYProperty, animation);
     }
 
-    // ---- Panel entrance: rises 10 DIP from the taskbar, scales up from 96 % and fades in.
-    public static void EnterPanel(UIElement panel)
+    // ---- Panel entrance and exit. The panel grows out of the point it was opened
+    // from (the tray icon, given as a fraction of the panel's own size) and returns
+    // to it. A token makes a reopen during the exit cancel that exit's hide.
+    private static readonly Point FromTaskbar = new(0.5, 1);
+    private static readonly TimeSpan Leave = TimeSpan.FromMilliseconds(150);
+    private static readonly IEasingFunction EaseIn = Frozen(new CubicEase { EasingMode = EasingMode.EaseIn });
+    public static void EnterPanel(UIElement panel, Point? origin = null)
     {
-        if (!Active) { panel.BeginAnimation(UIElement.OpacityProperty, null); return; }
         var (scale, offset) = Transforms(panel);
+        panel.RenderTransformOrigin = origin ?? FromTaskbar;
+        panel.Opacity = 1;
+        offset.BeginAnimation(TranslateTransform.YProperty, null);
+        if (!Active)
+        {
+            panel.BeginAnimation(UIElement.OpacityProperty, null);
+            scale.BeginAnimation(ScaleTransform.ScaleXProperty, null); scale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+            return;
+        }
         panel.BeginAnimation(UIElement.OpacityProperty, To(0, 1, Fade, EaseOut));
-        scale.BeginAnimation(ScaleTransform.ScaleXProperty, To(0.96, 1, Spring, SpringCurve));
-        scale.BeginAnimation(ScaleTransform.ScaleYProperty, To(0.96, 1, Spring, SpringCurve));
-        offset.BeginAnimation(TranslateTransform.YProperty, To(10, 0, Spring, SpringCurve));
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, To(0.6, 1, Spring, SpringCurve));
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, To(0.6, 1, Spring, SpringCurve));
+    }
+    /// <summary>Shrink back to the origin and fade, then call <paramref name="hide"/>,
+    /// which answers false when the panel was reopened meanwhile and must be left alone.</summary>
+    public static void LeavePanel(UIElement panel, Func<bool> hide)
+    {
+        if (!Active) { hide(); return; }
+        var (scale, _) = Transforms(panel);
+        var fade = new DoubleAnimation { To = 0, Duration = Leave, EasingFunction = EaseIn };
+        fade.Completed += (_, _) =>
+        {
+            if (!hide()) return;
+            // Only after the window is gone: clearing first would flash the panel back at full size.
+            panel.BeginAnimation(UIElement.OpacityProperty, null);
+            scale.BeginAnimation(ScaleTransform.ScaleXProperty, null); scale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+        };
+        var shrink = new DoubleAnimation { To = 0.8, Duration = Leave, EasingFunction = EaseIn };
+        shrink.Freeze();
+        panel.BeginAnimation(UIElement.OpacityProperty, fade);
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, shrink);
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, shrink);
+    }
+    /// <summary>Glide a length (a bar's width) to a new value; set it outright when motion is off.</summary>
+    public static void Glide(FrameworkElement element, DependencyProperty property, double to, bool animate = true)
+    {
+        var current = (double)element.GetValue(property);
+        if (!Active || !animate || double.IsNaN(current) || !element.IsVisible)
+        {
+            element.BeginAnimation(property, null); element.SetValue(property, to);
+            return;
+        }
+        var animation = new DoubleAnimation { To = to, Duration = QuickTime, EasingFunction = QuickCurve };
+        animation.Freeze();
+        element.BeginAnimation(property, animation);
     }
     private static (ScaleTransform, TranslateTransform) Transforms(UIElement element)
     {

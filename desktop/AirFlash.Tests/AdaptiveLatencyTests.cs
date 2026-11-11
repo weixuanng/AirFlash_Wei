@@ -113,6 +113,35 @@ public sealed class AdaptiveLatencyTests
         for (var i = 0; i < 3; i++) state.Recovery("timeline_reanchored");
         return state.Evaluate(Pair, true);
     }
+    internal static TransportMetrics Link(double uptime, long sent, long resent = 0, long late = 0, long epoch = 7)
+        => new(uptime, 0, 0, 0, [new MemberTransportMetrics("a", sent, 0, 0, resent + late, resent, 0, late, 0, 0, null, null, null, null, null, null)],
+            IntervalLatenessP99Ms: 0, SessionEpoch: epoch, UnderrunsActive: 0, UnderrunsIdle: 0);
+    [Fact]
+    public void ResendsThatComeTooLateRaiseTheDelayButOneBadSecondDoesNot()
+    {
+        var clock = new ManualClock(); var state = State(clock);
+        long late = 0;
+        for (var i = 0; i <= 12; i++)
+        {
+            if (i == 5) late++; // a single late resend
+            clock.Advance(1); state.Observe(Link(i * 1000, i * 125, late: late));
+            Assert.Null(state.Evaluate(Pair, true));
+        }
+        for (var i = 13; i <= 15; i++) { clock.Advance(1); state.Observe(Link(i * 1000, i * 125, late: ++late)); }
+        var action = Assert.IsType<AdaptiveAction>(state.Evaluate(Pair, true));
+        Assert.Equal("resent audio arrived too late", action.Reason);
+        Assert.Equal(140, action.Target);
+    }
+    [Fact]
+    public void SustainedLossRaisesTheDelayAndACleanLinkDoesNot()
+    {
+        var clock = new ManualClock(); var state = State(clock);
+        for (var i = 0; i <= 12; i++) { clock.Advance(1); state.Observe(Link(i * 1000, i * 125, resent: i)); } // 0.8 %
+        Assert.Null(state.Evaluate(Pair, true));
+        long resent = 12;
+        for (var i = 13; i <= 17; i++) { clock.Advance(1); resent += 5; state.Observe(Link(i * 1000, i * 125, resent: resent)); } // 4 %
+        Assert.Equal("sustained packet loss", Assert.IsType<AdaptiveAction>(state.Evaluate(Pair, true)).Reason);
+    }
     [Fact]
     public void ActiveUnderrunsTriggerButIdleCountsAndLifetimeHistogramsDoNot()
     {

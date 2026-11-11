@@ -34,6 +34,11 @@ internal sealed class AdaptiveLatency(TimeProvider clock)
     private long? _observeFrom, _healthySince, _lastRecovery, _lastTrouble;
     private double? _lastUptime, _negotiatedBase;
     private long? _lastUnderruns;
+    // Loss the speaker reports. The sender's own timing can be perfect while Wi-Fi
+    // drops packets, so this is the only sign that a longer delay would help: it
+    // gives a resend time to arrive before the audio is due.
+    private LinkTotals? _lastLink;
+    private readonly Queue<(bool Late, bool Heavy)> _loss = new();
     private int _underrunStreak;
     private string? _trouble;
     private AdaptiveAction? _restart;
@@ -83,6 +88,7 @@ internal sealed class AdaptiveLatency(TimeProvider clock)
         _lastUptime = null; _lastUnderruns = null; _healthySince = null; _lastRecovery = null;
         _skipMetrics = false;
         _lastTrouble = null;
+        _lastLink = null; _loss.Clear();
     }
     public bool Accept(LatencyRuntime runtime)
     {
@@ -123,13 +129,26 @@ internal sealed class AdaptiveLatency(TimeProvider clock)
         _lastUptime = uptime;
         var delta = metrics.UnderrunsActive is { } count && _lastUnderruns is { } old && count >= old ? count - old : (long?)null;
         _lastUnderruns = metrics.UnderrunsActive;
-        if (gap) { _lateness.Reset(); _underrunStreak = 0; _healthySince = null; }
+        var link = LinkTotals.From(metrics);
+        var loss = link is { } totals && _lastLink is { } earlier ? totals.Since(earlier) : null;
+        _lastLink = link;
+        if (gap) { _lateness.Reset(); _underrunStreak = 0; _healthySince = null; _loss.Clear(); }
         if (_skipMetrics) { _skipMetrics = false; return true; }
+        if (loss is { Sent: > 0 } lost)
+        {
+            _loss.Enqueue((lost.Late > 0, lost.Resent + lost.Late >= lost.Sent * 0.02));
+            while (_loss.Count > 10) _loss.Dequeue();
+            // Three seconds in ten with a resend that came too late, or half the
+            // window losing 2 % or more: one bad second alone is not a reason.
+            var reason = _loss.Count(s => s.Late) >= 3 ? "resent audio arrived too late"
+                : _loss.Count(s => s.Heavy) >= 5 ? "sustained packet loss" : null;
+            if (reason is not null) { _trouble = reason; _lastTrouble = clock.GetTimestamp(); _loss.Clear(); }
+        }
         if (_lateness.Observe(metrics.IntervalLatenessP99Ms)) { _trouble = "sustained p99 lateness"; _lastTrouble = clock.GetTimestamp(); }
         _underrunStreak = delta > 0 ? _underrunStreak + 1 : 0;
         if (_underrunStreak >= 3) { _trouble = "sustained active-audio underruns"; _lastTrouble = clock.GetTimestamp(); }
         var now = clock.GetTimestamp();
-        var healthy = delta == 0 && metrics.IntervalLatenessP99Ms is >= 0 and < 3
+        var healthy = delta == 0 && loss is not { Late: > 0 } && metrics.IntervalLatenessP99Ms is >= 0 and < 3
             && (_lastRecovery is null || clock.GetElapsedTime(_lastRecovery.Value, now) >= TimeSpan.FromSeconds(2));
         if (!healthy) _healthySince = null;
         else

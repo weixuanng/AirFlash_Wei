@@ -401,5 +401,10 @@
   "Hide this speaker": "Diesen Lautsprecher ausblenden",
   "Show hidden speakers ({0})": "Ausgeblendete Lautsprecher anzeigen ({0})",
   "Volume keys control the speaker": "Lautstärketasten steuern den Lautsprecher",
-  "While connected, the keyboard volume keys change the speaker instead of this PC.": "Solange verbunden, ändern die Lautstärketasten den Lautsprecher statt diesen PC."
+  "While connected, the keyboard volume keys change the speaker instead of this PC.": "Solange verbunden, ändern die Lautstärketasten den Lautsprecher statt diesen PC.",
+  "Connection is good": "Verbindung ist gut",
+  "Some audio is being sent again. Wi-Fi is dropping packets.": "Ein Teil des Tons wird erneut gesendet. Das WLAN verliert Pakete.",
+  "Audio is being lost on the way. Move the PC or the speaker closer to the router, or set Delay to Most stable.": "Ton geht unterwegs verloren. Stelle PC oder Lautsprecher näher an den Router oder setze die Verzögerung auf „Am stabilsten“.",
+  "Blur what is behind the panel": "Hintergrund des Fensters weichzeichnen",
+  "Shows a blurred view of the screen through the panel. Turn it off if the panel looks wrong.": "Zeigt den Bildschirm weichgezeichnet durch das Fenster. Ausschalten, falls das Fenster falsch aussieht."
 }

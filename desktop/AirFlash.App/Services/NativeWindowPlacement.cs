@@ -7,6 +7,8 @@ namespace AirFlash.App.Services;
 public sealed record MonitorArea(PixelRect Rect, double Scale);
 public static class NativeWindowPlacement
 {
+    /// <summary>The pointer, in screen pixels.</summary>
+    public static System.Windows.Point Cursor() { GetCursorPos(out var point); return new(point.X, point.Y); }
     public static MonitorArea CursorWorkArea() { GetCursorPos(out var point); return Area(MonitorFromPoint(point, 2)); }
     public static MonitorArea FromRect(Rectangle rectangle) => Area(MonitorFromRect(ref rectangle, 2));
     private static MonitorArea Area(IntPtr monitor)

@@ -384,5 +384,10 @@
   "Hide this speaker": "隱藏此喇叭",
   "Show hidden speakers ({0})": "顯示已隱藏的喇叭（{0}）",
   "Volume keys control the speaker": "音量鍵控制喇叭",
-  "While connected, the keyboard volume keys change the speaker instead of this PC.": "連線期間，鍵盤音量鍵調整喇叭音量，而不是此電腦。"
+  "While connected, the keyboard volume keys change the speaker instead of this PC.": "連線期間，鍵盤音量鍵調整喇叭音量，而不是此電腦。",
+  "Connection is good": "連線良好",
+  "Some audio is being sent again. Wi-Fi is dropping packets.": "部分音訊正在重新傳送。Wi-Fi 正在遺失封包。",
+  "Audio is being lost on the way. Move the PC or the speaker closer to the router, or set Delay to Most stable.": "音訊在傳輸途中遺失。請將電腦或揚聲器移近路由器，或將延遲設為「最穩定」。",
+  "Blur what is behind the panel": "模糊面板後方的內容",
+  "Shows a blurred view of the screen through the panel. Turn it off if the panel looks wrong.": "透過面板顯示模糊的螢幕畫面。如果面板顯示異常，請關閉此項。"
 }

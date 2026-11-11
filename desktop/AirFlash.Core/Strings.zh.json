@@ -401,5 +401,10 @@
   "Hide this speaker": "隐藏此音箱",
   "Show hidden speakers ({0})": "显示已隐藏的音箱（{0}）",
   "Volume keys control the speaker": "音量键控制音箱",
-  "While connected, the keyboard volume keys change the speaker instead of this PC.": "连接期间，键盘音量键调节音箱音量，而不是此电脑。"
+  "While connected, the keyboard volume keys change the speaker instead of this PC.": "连接期间，键盘音量键调节音箱音量，而不是此电脑。",
+  "Connection is good": "连接良好",
+  "Some audio is being sent again. Wi-Fi is dropping packets.": "部分音频正在重新发送。Wi-Fi 正在丢包。",
+  "Audio is being lost on the way. Move the PC or the speaker closer to the router, or set Delay to Most stable.": "音频在传输途中丢失。请将电脑或扬声器移近路由器，或将延迟设为“最稳定”。",
+  "Blur what is behind the panel": "模糊面板后面的内容",
+  "Shows a blurred view of the screen through the panel. Turn it off if the panel looks wrong.": "透过面板显示模糊的屏幕画面。如果面板显示异常，请关闭此项。"
 }

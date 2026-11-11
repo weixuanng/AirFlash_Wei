@@ -70,6 +70,15 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
         get => _panel.VolumeKeys;
         set { if (value == _panel.VolumeKeys) return; _panel.VolumeKeys = value; _panel.Save(); AppPaths.Log($"Setting volume_keys={value}"); Notify(); }
     }
+    /// <summary>Windows blurs what is behind the panel.</summary>
+    public bool PanelBlurEnabled
+    {
+        get => _panel.Blur;
+        set { if (value == _panel.Blur) return; _panel.Blur = value; _panel.Save(); AppPaths.Log($"Setting panel_blur={value}"); Notify(); }
+    }
+    private readonly LinkQuality _link = new();
+    /// <summary>How well audio is reaching the speaker in use.</summary>
+    public LinkGrade LinkGrade => _link.Grade;
     /// <summary>Speakers the user has hidden from the list.</summary>
     public int HiddenCount => _settings.Receivers.Values.Count(options => options.Hidden);
     public bool HasHidden => HiddenCount > 0;
@@ -502,6 +511,10 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
         var previous = _snapshot;
         var volumeAvailable = VolumeAvailable; var volume = DeviceVolume; var volumeWritable = VolumeWritable;
         _snapshot = snapshot;
+        var grade = _link.Grade;
+        if (snapshot.State != PlaybackState.Streaming) _link.Reset();
+        else _link.Observe(snapshot.Diagnostics?.Transport);
+        if (grade != _link.Grade) AppPaths.Log($"Link quality={_link.Grade}; resent_percent={_link.LossPercent:0.0}");
         if (volumeAvailable != VolumeAvailable)
         {
             Notify(nameof(VolumeAvailable));
@@ -812,9 +825,18 @@ public sealed class ReceiverViewModel : ObservableObject
     public string StateText => (_app.Snapshot.State == PlaybackState.Streaming && Active ? L.Get("Playing")
         : NeedsDisconnect ? _app.StatusTitle
         : !Receiver.Online ? L.Get("Offline") : !Receiver.Complete ? L.Get("Waiting for the other member") : L.Get("Disconnected")) + (Receiver.IsGroup ? $" · {Receiver.Members.Length}/2" : "");
+    /// <summary>Bars to light on the row's signal mark: 0 hides it, 3 is a clean link.</summary>
+    public int Quality => IsStreaming ? (int)_app.LinkGrade : 0;
+    public string QualityText => _app.LinkGrade switch
+    {
+        LinkGrade.Good => L.Get("Connection is good"),
+        LinkGrade.Fair => L.Get("Some audio is being sent again. Wi-Fi is dropping packets."),
+        LinkGrade.Poor => L.Get("Audio is being lost on the way. Move the PC or the speaker closer to the router, or set Delay to Most stable."),
+        _ => "",
+    };
     public void Refresh()
     {
-        var values = new Dictionary<string, object?> { [nameof(IsStopping)] = IsStopping, [nameof(NeedsDisconnect)] = NeedsDisconnect, [nameof(Name)] = Name, [nameof(Detail)] = Detail, [nameof(Active)] = Active, [nameof(IsStreaming)] = IsStreaming, [nameof(CanPlay)] = CanPlay, [nameof(StateText)] = StateText };
+        var values = new Dictionary<string, object?> { [nameof(Quality)] = Quality, [nameof(QualityText)] = QualityText, [nameof(IsStopping)] = IsStopping, [nameof(NeedsDisconnect)] = NeedsDisconnect, [nameof(Name)] = Name, [nameof(Detail)] = Detail, [nameof(Active)] = Active, [nameof(IsStreaming)] = IsStreaming, [nameof(CanPlay)] = CanPlay, [nameof(StateText)] = StateText };
         foreach (var (name, value) in values)
             if (!_display.TryGetValue(name, out var old) || !Equals(old, value))
             {
