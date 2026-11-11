@@ -90,7 +90,9 @@ public partial class ControlPanel : Window
             if (args.PropertyName != nameof(AppViewModel.PanelBlurEnabled)) return;
             if (viewModel.PanelBlurEnabled) BlurOn(); else BlurOff();
         };
-        _blurTimer = new(DispatcherPriority.Background, Dispatcher) { Interval = TimeSpan.FromMilliseconds(260) };
+        // Not before the entrance spring has settled: the blur covers the whole window, so an
+        // earlier start would show a rim of blur around the still-growing card.
+        _blurTimer = new(DispatcherPriority.Background, Dispatcher) { Interval = Motion.Spring };
         _blurTimer.Tick += (_, _) => { _blurTimer.Stop(); BlurOn(); };
         DpiChanged += (_, _) => { RequestPlacement(); if (_blurred) Dispatcher.BeginInvoke(() => { if (_blurred) PanelBackdrop.Resize(this, CardRadius); }, DispatcherPriority.Loaded); };
     }
@@ -175,11 +177,17 @@ public partial class ControlPanel : Window
             // Never reuse a width fed back by a native resize or a DPI transition.
             NativeWindowPlacement.Place(this, area, CompactWidth, ActualHeight);
         }
-        finally { _placing = false; }
-        if (!_entering) return;
-        _entering = false;
-        Motion.EnterPanel(Card, OpenedFrom());
-        if (Motion.Active) _blurTimer.Start(); else BlurOn();
+        finally
+        {
+            _placing = false;
+            // In the finally: a failed placement must still leave a visible panel.
+            if (_entering)
+            {
+                _entering = false;
+                Motion.EnterPanel(Card, OpenedFrom());
+                if (Motion.Active) _blurTimer.Start(); else BlurOn();
+            }
+        }
     }
     private void OnDeactivated(object sender, EventArgs args)
     {
@@ -203,7 +211,7 @@ public partial class ControlPanel : Window
     public void ShutdownPanel()
     {
         _viewModel.Receivers.CollectionChanged -= OnReceiversChanged;
-        _placement?.Abort(); _blurTimer.Stop();
+        _placement?.Abort(); _blurTimer.Stop(); _leaving = false;
         _allowClose = true; Close();
     }
 }

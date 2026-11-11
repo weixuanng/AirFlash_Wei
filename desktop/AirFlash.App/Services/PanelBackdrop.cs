@@ -15,19 +15,20 @@ internal static class PanelBackdrop
 {
     /// <summary>Off for verification runs, which must not depend on the compositor.</summary>
     public static bool Enabled { get; set; } = true;
+    private static bool _refused; // asked once; a refusal does not change while the app runs
     private const int AccentPolicyAttribute = 19, Disabled = 0, Blur = 3, Acrylic = 4;
     private const int CornerPreference = 33, Round = 2;
 
     /// <summary>Turn the blur on. False when Windows refused; the panel then keeps its solid look.</summary>
     public static bool Apply(Window window, double cornerRadius)
     {
-        if (!Enabled || new WindowInteropHelper(window).Handle is var handle && handle == IntPtr.Zero) return false;
+        if (!Enabled || _refused || new WindowInteropHelper(window).Handle is var handle && handle == IntPtr.Zero) return false;
         try
         {
             // A near-transparent tint: the panel paints its own colour over the blur.
             // Acrylic ignores a tint with no alpha at all.
             var applied = SetAccent(handle, Acrylic, 0x01000000) || SetAccent(handle, Blur, 0);
-            if (!applied) { AppPaths.Log("Panel blur unavailable: Windows refused the accent policy"); return false; }
+            if (!applied) { _refused = true; AppPaths.Log("Panel blur unavailable: Windows refused the accent policy"); return false; }
             Clip(window, handle, cornerRadius);
             var round = Round;
             _ = DwmSetWindowAttribute(handle, CornerPreference, ref round, sizeof(int)); // Windows 11 only; the region covers the rest
@@ -35,6 +36,7 @@ internal static class PanelBackdrop
         }
         catch (Exception error) when (error is EntryPointNotFoundException or DllNotFoundException)
         {
+            _refused = true;
             AppPaths.Log($"Panel blur unavailable: {error.Message}");
             return false;
         }
@@ -77,7 +79,7 @@ internal static class PanelBackdrop
     }
 
     [StructLayout(LayoutKind.Sequential)] private struct AccentPolicy { public int State, Flags; public uint Tint; public int Animation; }
-    [StructLayout(LayoutKind.Sequential)] private struct CompositionData { public int Attribute; public IntPtr Data; public int Size; }
+    [StructLayout(LayoutKind.Sequential)] private struct CompositionData { public int Attribute; public IntPtr Data; public nint Size; } // cbData is a SIZE_T
     [StructLayout(LayoutKind.Sequential)] private struct NativeRect { public int Left, Top, Right, Bottom; }
     [DllImport("user32.dll")] private static extern int SetWindowCompositionAttribute(IntPtr window, ref CompositionData data);
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr window, out NativeRect rect);

@@ -133,6 +133,19 @@ public sealed class AdaptiveLatencyTests
         Assert.Equal(140, action.Target);
     }
     [Fact]
+    public void LossAtTheTopOfTheLadderNeverRebuildsTheStream()
+    {
+        var clock = new ManualClock(); var state = State(clock, 200);
+        long late = 0;
+        for (var round = 0; round < 4; round++)
+            for (var i = 1; i <= 15; i++)
+            {
+                clock.Advance(1); state.Observe(Link((round * 15 + i) * 1000, (round * 15 + i) * 125, late: ++late));
+                Assert.Null(state.Evaluate(Pair, true));
+            }
+        Assert.Equal(0, state.Rebuilds);
+    }
+    [Fact]
     public void SustainedLossRaisesTheDelayAndACleanLinkDoesNot()
     {
         var clock = new ManualClock(); var state = State(clock);
