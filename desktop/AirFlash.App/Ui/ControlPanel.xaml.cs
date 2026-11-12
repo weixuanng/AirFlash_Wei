@@ -138,6 +138,11 @@ public partial class ControlPanel : Window
         var (page, other) = (show ? Visibility.Visible : Visibility.Collapsed, show ? Visibility.Collapsed : Visibility.Visible);
         SettingsPage.Visibility = SettingsTitle.Visibility = page;
         MainTitle.Visibility = SettingsButton.Visibility = NoticeArea.Visibility = DeviceScroll.Visibility = ControlsArea.Visibility = other;
+        // Centred over the speakers; on the settings page it steps right, clear of the title.
+        var island = new Thickness(show ? 36 : 0, -8, 0, 0);
+        if (IsVisible && Motion.Active)
+            Island.BeginAnimation(MarginProperty, new System.Windows.Media.Animation.ThicknessAnimation(island, Motion.Spring) { EasingFunction = Motion.SpringCurve });
+        else { Island.BeginAnimation(MarginProperty, null); Island.Margin = island; }
         if (!IsVisible) return; // set up for the next opening; nothing to animate
         // Each page comes in from its own side: settings from the right, the speakers from the left.
         // Focus follows only for keyboard users; after a click it would just draw a focus ring.

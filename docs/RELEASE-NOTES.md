@@ -1,4 +1,4 @@
-# Airplay 0.2.15
+# Airplay 0.2.16
 
 Changes since Airplay 0.2.14.
 
@@ -17,6 +17,6 @@ Changes since Airplay 0.2.14.
 
 - **Stronger glass:** the panel is more see-through, with brighter edges and a stronger highlight.
 
-Run **Airplay-0.2.15.msi** to install or upgrade. The portable **Airplay.exe** still works but does not get the firewall rule. Verify downloads with **SHA256SUMS.txt**. Binaries are unsigned, so Windows SmartScreen may ask you to confirm the first run.
+Run **Airplay-0.2.16.msi** to install or upgrade. The portable **Airplay.exe** still works but does not get the firewall rule. Verify downloads with **SHA256SUMS.txt**. Binaries are unsigned, so Windows SmartScreen may ask you to confirm the first run.
 
 Logs are in `%APPDATA%\Airplay\logs`.
