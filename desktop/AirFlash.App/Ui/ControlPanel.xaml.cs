@@ -139,8 +139,10 @@ public partial class ControlPanel : Window
         SettingsPage.Visibility = SettingsTitle.Visibility = page;
         MainTitle.Visibility = SettingsButton.Visibility = NoticeArea.Visibility = DeviceScroll.Visibility = ControlsArea.Visibility = other;
         // Each page comes in from its own side: settings from the right, the speakers from the left.
-        if (show) { Motion.SlideIn(SettingsPage, 26); Motion.SlideIn(SettingsTitle, 14); BackButton.Focus(); }
-        else { Motion.SlideIn(DeviceScroll, -26); Motion.SlideIn(ControlsArea, -26); Motion.SlideIn(MainTitle, -14); SettingsButton.Focus(); }
+        // Focus follows only for keyboard users; after a click it would just draw a focus ring.
+        var keyboard = InputManager.Current.MostRecentInputDevice is KeyboardDevice;
+        if (show) { Motion.SlideIn(SettingsPage, 26); Motion.SlideIn(SettingsTitle, 14); if (keyboard) BackButton.Focus(); }
+        else { Motion.SlideIn(DeviceScroll, -26); Motion.SlideIn(ControlsArea, -26); Motion.SlideIn(MainTitle, -14); if (keyboard) SettingsButton.Focus(); }
     }
     /// <summary>Close the panel: it shrinks back to where it opened from, then hides.</summary>
     public void Dismiss()
