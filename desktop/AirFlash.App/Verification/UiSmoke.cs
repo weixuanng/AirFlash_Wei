@@ -145,6 +145,9 @@ internal static class UiSmoke
                 CheckPanelIcons(panel, app, checks);
                 foreach (var scale in new[] { 1d, 1.25, 1.5, 1.75, 2d }) Render(panel, Path.Combine(directory, $"panel-{(dark ? "dark" : "light")}-{scale * 100}.png"), scale);
                 {
+                    var island = (FrameworkElement)panel.FindName("Island"); var pill = (FrameworkElement)island.FindName("Pill"); var compact = (FrameworkElement)island.FindName("Compact");
+                    Check(!island.IsVisible || pill.ActualWidth + 0.5 >= compact.DesiredSize.Width,
+                        $"the island's pill is as wide as what it shows (pill {pill.ActualWidth:0.#}, content {compact.DesiredSize.Width:0.#})", checks);
                     panel.ShowSettings(true); await Pump();
                     var page = (FrameworkElement)panel.FindName("SettingsPage"); var delay = (FrameworkElement)panel.FindName("DelayOption");
                     var speakers = (FrameworkElement)panel.FindName("DeviceScroll");

@@ -26,6 +26,9 @@ public partial class ErrorIsland : UserControl
     {
         get
         {
+            // New text only marks the text block itself for measuring; without this the
+            // panel answers from its last measurement and the pill keeps the old text's width.
+            CompactText.InvalidateMeasure(); Compact.InvalidateMeasure();
             Compact.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             return Math.Clamp(Math.Ceiling(Compact.DesiredSize.Width), MinCompact, MaxCompact);
         }
