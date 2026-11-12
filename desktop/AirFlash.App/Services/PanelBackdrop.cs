@@ -57,10 +57,17 @@ internal static class PanelBackdrop
 
     private static void Clip(Window window, IntPtr handle, double cornerRadius)
     {
-        if (!GetWindowRect(handle, out var rect)) return;
-        var diameter = (int)Math.Round(2 * cornerRadius * VisualTreeHelper.GetDpi(window).DpiScaleX);
+        // Sized from the layout, not from the window handle: when the panel grows (the
+        // settings page is taller than the speakers) the handle still has its old size
+        // at this point, and a region cut to that would crop the new page's lower part.
+        var dpi = VisualTreeHelper.GetDpi(window);
+        var width = (int)Math.Ceiling(window.ActualWidth * dpi.DpiScaleX);
+        var height = (int)Math.Ceiling(window.ActualHeight * dpi.DpiScaleY);
+        if (GetWindowRect(handle, out var rect)) { width = Math.Max(width, rect.Right - rect.Left); height = Math.Max(height, rect.Bottom - rect.Top); }
+        if (width <= 0 || height <= 0) return;
+        var diameter = (int)Math.Round(2 * cornerRadius * dpi.DpiScaleX);
         // The region's right and bottom edges are exclusive, hence the extra pixel.
-        var region = CreateRoundRectRgn(0, 0, rect.Right - rect.Left + 1, rect.Bottom - rect.Top + 1, diameter, diameter);
+        var region = CreateRoundRectRgn(0, 0, width + 1, height + 1, diameter, diameter);
         // Windows owns the region once it is set; it is ours to free only on failure.
         if (region != IntPtr.Zero && SetWindowRgn(handle, region, true) == 0) DeleteObject(region);
     }
