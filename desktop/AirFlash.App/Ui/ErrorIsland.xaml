@@ -45,7 +45,7 @@
     <Grid>
       <StackPanel x:Name="Compact" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="10,0,12,0">
         <ContentControl Style="{StaticResource ToneIcon}" Tag="{Binding Tone, ElementName=Root}" VerticalAlignment="Center"/>
-        <TextBlock x:Name="CompactText" Foreground="White" FontSize="11" FontWeight="SemiBold" Margin="7,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="74"/>
+        <TextBlock x:Name="CompactText" Foreground="White" FontSize="11" FontWeight="SemiBold" Margin="7,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="66"/>
       </StackPanel>
       <Grid x:Name="Expanded" Margin="12,0,12,0" Opacity="0" VerticalAlignment="Center" IsHitTestVisible="False">
         <Grid.ColumnDefinitions>
