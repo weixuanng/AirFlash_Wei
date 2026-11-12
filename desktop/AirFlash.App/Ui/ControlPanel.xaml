@@ -200,6 +200,7 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
           <Button x:Name="ShowHidden" Click="ShowHidden_Click" Content="{Binding ShowHiddenLabel}" Visibility="{Binding HasHidden, Converter={StaticResource BoolVisibility}}" HorizontalAlignment="Left" Margin="4,0,0,8" Padding="0" MinHeight="0" Background="Transparent" BorderThickness="0" Cursor="Hand" Foreground="{DynamicResource AccentBrush}" FontSize="12"/>
+          <Button x:Name="ShowFiltered" Click="ShowFiltered_Click" Content="{Binding ShowFilteredLabel}" Visibility="{Binding OfferFiltered, Converter={StaticResource BoolVisibility}}" HorizontalAlignment="Left" Margin="4,0,0,8" Padding="0" MinHeight="0" Background="Transparent" BorderThickness="0" Cursor="Hand" Foreground="{DynamicResource AccentBrush}" FontSize="12"/>
         </StackPanel>
       </ScrollViewer>
       <StackPanel x:Name="ControlsArea" Grid.Row="3" Margin="2,4,2,0">

@@ -63,7 +63,9 @@ internal static class PanelBackdrop
         var dpi = VisualTreeHelper.GetDpi(window);
         var width = (int)Math.Ceiling(window.ActualWidth * dpi.DpiScaleX);
         var height = (int)Math.Ceiling(window.ActualHeight * dpi.DpiScaleY);
-        if (GetWindowRect(handle, out var rect)) { width = Math.Max(width, rect.Right - rect.Left); height = Math.Max(height, rect.Bottom - rect.Top); }
+        // The handle's own size is only a fallback: after the panel shrinks it can still be
+        // the old, taller one, and a region cut to that leaves the lower corners square.
+        if ((width <= 0 || height <= 0) && GetWindowRect(handle, out var rect)) { width = rect.Right - rect.Left; height = rect.Bottom - rect.Top; }
         if (width <= 0 || height <= 0) return;
         var diameter = (int)Math.Round(2 * cornerRadius * dpi.DpiScaleX);
         // The region's right and bottom edges are exclusive, hence the extra pixel.

@@ -416,5 +416,6 @@
   "Low latency (Mac mode)": "Niedrige Latenz (Mac-Modus)",
   "Experimental. Connects to a HomePod the way a Mac does and sends uncompressed audio, which may let it play with a shorter delay. Turn it off if the speaker will not connect or stays silent.": "Experimentell. Verbindet sich wie ein Mac mit einem HomePod und sendet unkomprimierten Ton, wodurch eine kürzere Verzögerung möglich sein kann. Ausschalten, wenn der Lautsprecher keine Verbindung herstellt oder stumm bleibt.",
   "Only show HomePods": "Nur HomePods anzeigen",
-  "Leaves televisions and other AirPlay devices out of the list.": "Lässt Fernseher und andere AirPlay-Geräte aus der Liste weg."
+  "Leaves televisions and other AirPlay devices out of the list.": "Lässt Fernseher und andere AirPlay-Geräte aus der Liste weg.",
+  "Show other AirPlay devices ({0})": "Andere AirPlay-Geräte anzeigen ({0})"
 }

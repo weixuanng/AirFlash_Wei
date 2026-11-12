@@ -674,13 +674,18 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
             // Unlike startedAt, never cleared: a standby resume is not a first start.
             var streamedAt = 0L;
             string? clockStrategy = null;
+            // False under Mac mode, which pins the arrangement: its outcome must not
+            // re-order or re-prove the arrangements remembered for ordinary playback.
+            var searching = false;
             try
             {
                 var settings = _settings;
                 if (RotatesClockStrategy(receiver, settings))
                 {
-                    clockStrategy = _clockStrategies.Current(receiver.Id);
-                    log?.Invoke($"Clock strategy: {clockStrategy}; receiver {receiver.Id}; attempt {attempts}");
+                    // Mac mode is one arrangement, not a search: the Mac's way of following the speaker.
+                    clockStrategy = settings.MacMode ? ClockStrategyPlan.FollowActive : _clockStrategies.Current(receiver.Id);
+                    searching = !settings.MacMode;
+                    log?.Invoke($"Clock strategy: {clockStrategy}; receiver {receiver.Id}; attempt {attempts}; mac_mode={settings.MacMode}");
                 }
                 if (LatencyPolicy.ForceConflict(settings, receiver) is { } conflict)
                     throw new EngineFailure(new("forced_latency_conflict", "", "setup", conflict, false));
@@ -910,7 +915,7 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
                         }
                         else if (kind == "transport_metrics" && startedAt != 0)
                         {
-                            if (clockStrategy is not null && streamedAt != 0 && Stopwatch.GetElapsedTime(streamedAt) >= ClockProvenAfter)
+                            if (searching && streamedAt != 0 && Stopwatch.GetElapsedTime(streamedAt) >= ClockProvenAfter)
                                 _clockStrategies.Worked(receiver.Id);
                             var metrics = TransportMetrics.Parse(item);
                             if (recoveryHealth.Observe(metrics))
@@ -975,7 +980,7 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
                 // never became ready, or it was lost within moments of streaming. A
                 // session that held its clock keeps the arrangement and has it saved;
                 // any other failure (network, sign-in, another sender) changes nothing.
-                if (clockStrategy is not null)
+                if (searching)
                 {
                     var held = streamedAt == 0 ? TimeSpan.Zero : Stopwatch.GetElapsedTime(streamedAt);
                     // A refusal before any clock work (say, the receiver rejects the sender

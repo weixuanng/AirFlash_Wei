@@ -162,9 +162,14 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
         get => _panel.OnlyHomePods;
         set { if (value == _panel.OnlyHomePods) return; _panel.OnlyHomePods = value; _panel.Save(); AppPaths.Log($"Setting only_homepods={value}"); Notify(); RefreshReceivers(); }
     }
-    /// <summary>A HomePod, or a stereo pair. A speaker added by hand is always shown.</summary>
+    /// <summary>A HomePod, or a stereo pair. A speaker added by hand is always shown, and
+    /// so is one that has not said what it is: only a device known to be something else is left out.</summary>
     private static bool IsHomePod(Receiver receiver) => receiver.IsManual || receiver.IsGroup
-        || receiver.Peers.Append(receiver).Any(r => r.Model.StartsWith("AudioAccessory", StringComparison.Ordinal) || r.Model.Contains("HomePod", StringComparison.OrdinalIgnoreCase));
+        || receiver.Peers.Append(receiver).Any(r => r.Model.Length == 0 || r.Model.StartsWith("AudioAccessory", StringComparison.Ordinal) || r.Model.Contains("HomePod", StringComparison.OrdinalIgnoreCase));
+    /// <summary>Devices the HomePod filter is keeping out, offered back only when it has left nothing to connect to.</summary>
+    public int FilteredCount => _panel.OnlyHomePods ? AllReceivers.Count(r => r.Online && !_settings.ReadOptions(r.Id).Hidden && !IsHomePod(r)) : 0;
+    public bool OfferFiltered => FilteredCount > 0 && Receivers.Count == 0;
+    public string ShowFilteredLabel => L.Format("Show other AirPlay devices ({0})", FilteredCount);
     private bool Listed(Receiver receiver) => !_settings.ReadOptions(receiver.Id).Hidden && (!_panel.OnlyHomePods || IsHomePod(receiver));
     /// <summary>Capture application audio directly, before the playback device's volume
     /// and mute, so the PC's own speakers can stay muted.</summary>
@@ -361,7 +366,8 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
             if (!_settings.StartAtLogin) { _settings.StartAtLogin = true; fixedDefaultsChanged = true; }
             if (_settings.Theme != "system") { _settings.Theme = "system"; fixedDefaultsChanged = true; }
             foreach (var options in _settings.Receivers.Values)
-                if (options.LatencyMode is not null || options.ForceLatency is not null) { options.LatencyMode = null; options.ForceLatency = null; fixedDefaultsChanged = true; }
+                // A per-speaker value has no control any more and would silently win over the panel's.
+                if (options.LatencyMode is not null || options.ForceLatency is not null || options.CustomBufferMs is not null) { options.LatencyMode = null; options.ForceLatency = null; options.CustomBufferMs = null; fixedDefaultsChanged = true; }
             if (fixedDefaultsChanged) await SaveSettingsAsync(_settings);
             try { await _autostart.SetAsync(_settings.StartAtLogin); }
             catch (Exception error) { ShowError(error); }
@@ -567,7 +573,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
             else { row.Receiver = visible[i]; var previous = Receivers.IndexOf(row); if (previous != i) Receivers.Move(previous, i); }
             row.Refresh();
         }
-        Notify(nameof(AllReceivers));
+        Notify(nameof(AllReceivers)); Notify(nameof(FilteredCount)); Notify(nameof(OfferFiltered)); Notify(nameof(ShowFilteredLabel));
         RefreshPrimary();
     }
     private void SessionChanged(SessionSnapshot snapshot) => _dispatcher.BeginInvoke(() => ApplySessionSnapshot(snapshot));

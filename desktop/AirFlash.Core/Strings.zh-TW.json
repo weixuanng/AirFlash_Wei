@@ -399,5 +399,6 @@
   "Low latency (Mac mode)": "低延遲（Mac 模式）",
   "Experimental. Connects to a HomePod the way a Mac does and sends uncompressed audio, which may let it play with a shorter delay. Turn it off if the speaker will not connect or stays silent.": "實驗性功能。以 Mac 的方式連線 HomePod 並傳送未壓縮音訊，可能實現更短的延遲。如果揚聲器無法連線或沒有聲音，請關閉。",
   "Only show HomePods": "僅顯示 HomePod",
-  "Leaves televisions and other AirPlay devices out of the list.": "清單中不顯示電視和其他 AirPlay 裝置。"
+  "Leaves televisions and other AirPlay devices out of the list.": "清單中不顯示電視和其他 AirPlay 裝置。",
+  "Show other AirPlay devices ({0})": "顯示其他 AirPlay 裝置（{0}）"
 }

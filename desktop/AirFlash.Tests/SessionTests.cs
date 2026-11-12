@@ -1462,7 +1462,7 @@ public sealed class SessionTests
         {
             var process = new FakeConnection(); var factory = new FakeFactory(process); var audio = new FakeAudio();
             var settings = Settings(); settings.MacMode = true; settings.LatencyMode = "custom"; settings.CustomBufferMs = 70;
-            if (followed) settings.Options("a").Timing = "follow";
+            // Left on Automatic: a followed HomePod would otherwise start with the sender's clock.
             await using var controller = new SessionController(factory, audio, timing: Fast);
             await controller.StartAsync(Pod("a") with { FollowReceiverClock = followed }, settings);
             await Until(() => process.Commands.Any(c => c.Command == "start"));
@@ -1470,6 +1470,7 @@ public sealed class SessionTests
             Assert.Equal(followed, profile.GetProperty("mac_mode").GetBoolean());
             Assert.Equal(followed, profile.Text("codec") == "pcm");
             Assert.Equal(70, profile.Number("latency_ms"));
+            Assert.Equal(followed ? "follow_active" : null, profile.GetProperty("clock_strategy").GetString());
         }
     }
     [Fact]
