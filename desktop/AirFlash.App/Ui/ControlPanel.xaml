@@ -265,9 +265,9 @@
               <ComboBoxItem Content="{loc:Text 'Most stable'}"/>
             </ComboBox>
             </Grid>
-            <Border Height="1" Background="{DynamicResource LineBrush}" Opacity="0.7"/>
+            <Border Height="1" Background="{DynamicResource GlassEdgeBrush}" Opacity="0.55" SnapsToDevicePixels="True"/>
             <CheckBox x:Name="StandbyOption" Style="{StaticResource Switch}" IsChecked="{Binding StandbyEnabled, Mode=TwoWay}" Content="{loc:Text 'Release the speaker when silent'}" ToolTip="{loc:Text 'After three minutes without sound, Airplay lets go of the speaker so other devices can use it, and reconnects when sound plays again. The first moment of that sound is not heard.'}"/>
-            <Border Height="1" Background="{DynamicResource LineBrush}" Opacity="0.7"/>
+            <Border Height="1" Background="{DynamicResource GlassEdgeBrush}" Opacity="0.55" SnapsToDevicePixels="True"/>
             <CheckBox Style="{StaticResource Switch}" x:Name="VolumeKeysOption" IsChecked="{Binding VolumeKeysEnabled, Mode=TwoWay}" Content="{loc:Text 'Volume keys control the speaker'}" ToolTip="{loc:Text 'While connected, the keyboard volume keys change the speaker instead of this PC.'}"/>
           </StackPanel>
         </Border>
@@ -275,14 +275,14 @@
         <Border CornerRadius="14" BorderThickness="1" Padding="14,2" Background="{DynamicResource GlassCardBrush}" BorderBrush="{DynamicResource GlassEdgeBrush}">
           <StackPanel>
             <CheckBox Style="{StaticResource Switch}" x:Name="BlurOption" IsChecked="{Binding PanelBlurEnabled, Mode=TwoWay}" Content="{loc:Text 'Blur what is behind the panel'}" ToolTip="{loc:Text 'Shows a blurred view of the screen through the panel. Turn it off if the panel looks wrong.'}"/>
-            <Border Height="1" Background="{DynamicResource LineBrush}" Opacity="0.7"/>
+            <Border Height="1" Background="{DynamicResource GlassEdgeBrush}" Opacity="0.55" SnapsToDevicePixels="True"/>
             <CheckBox Style="{StaticResource Switch}" x:Name="DirectCaptureOption" IsChecked="{Binding DirectCapture, Mode=TwoWay}" IsEnabled="{Binding DirectCaptureAvailable}" Content="{loc:Text 'Capture apps directly'}" ToolTip="{loc:Text 'Takes audio from apps before the PC speakers, so the PC can stay muted. Turn off if the speaker goes silent.'}"/>
           </StackPanel>
         </Border>
       </StackPanel>
-      <!-- The status island sits over the header, against the header buttons' left edge,
-           and grows leftwards so they stay clickable. -->
-      <loc:ErrorIsland x:Name="Island" Grid.RowSpan="4" Panel.ZIndex="10" Margin="0,-8,76,0" IsOpen="{Binding IslandActive}" Tone="{Binding IslandTone}" Title="{Binding IslandTitle}" Message="{Binding IslandMessage}"/>
+      <!-- The status island sits over the middle of the header, a little right of centre so
+           the compact pill clears the title, and grows from its own centre. -->
+      <loc:ErrorIsland x:Name="Island" Grid.RowSpan="4" Panel.ZIndex="10" HorizontalAlignment="Center" Margin="22,-8,0,0" IsOpen="{Binding IslandActive}" Tone="{Binding IslandTone}" Title="{Binding IslandTitle}" Message="{Binding IslandMessage}"/>
     </Grid>
   </Border>
 </Window>

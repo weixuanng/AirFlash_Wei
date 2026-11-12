@@ -16,9 +16,10 @@ namespace AirFlash.App.Ui;
 /// Only sizes, opacity and a render scale animate; nothing runs while closed.</summary>
 public partial class ErrorIsland : UserControl
 {
-    private const double CompactHeight = 32, MinCompact = 56, MaxCompact = 132;
-    // The panel's content is 290 DIP wide; this stops short of the two header buttons.
-    private const double ExpandedWidth = 214, ExpandedHeight = 72;
+    private const double CompactHeight = 32, MinCompact = 56, MaxCompact = 120;
+    // The panel's content is 290 DIP wide. Open, the island covers the middle of the
+    // header, as the iPhone's does, and stops short of Quit.
+    private const double ExpandedWidth = 208, ExpandedHeight = 72;
     /// <summary>The compact pill hugs its mark and text.</summary>
     private double CompactWidth
     {
