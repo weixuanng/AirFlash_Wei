@@ -126,6 +126,22 @@ public partial class ControlPanel : Window
         var (x, y) = (pointer.X / ActualWidth, pointer.Y / ActualHeight);
         return x is < -0.6 or > 1.6 || y is < -0.6 or > 1.6 ? null : new(Math.Clamp(x, 0, 1), Math.Clamp(y, 0, 1));
     }
+    // ---- Settings: one level down from the speakers, as a page that slides in.
+    private bool _settings;
+    private void OnSettingsOpen(object sender, RoutedEventArgs e) => ShowSettings(true);
+    private void OnSettingsBack(object sender, RoutedEventArgs e) => ShowSettings(false);
+    /// <summary>Swap between the speakers and the settings page.</summary>
+    public void ShowSettings(bool show)
+    {
+        if (_settings == show) return;
+        _settings = show;
+        var (page, other) = (show ? Visibility.Visible : Visibility.Collapsed, show ? Visibility.Collapsed : Visibility.Visible);
+        SettingsPage.Visibility = SettingsTitle.Visibility = page;
+        MainTitle.Visibility = SettingsButton.Visibility = NoticeArea.Visibility = DeviceScroll.Visibility = ControlsArea.Visibility = other;
+        // Each page comes in from its own side: settings from the right, the speakers from the left.
+        if (show) { Motion.SlideIn(SettingsPage, 26); Motion.SlideIn(SettingsTitle, 14); BackButton.Focus(); }
+        else { Motion.SlideIn(DeviceScroll, -26); Motion.SlideIn(ControlsArea, -26); Motion.SlideIn(MainTitle, -14); SettingsButton.Focus(); }
+    }
     /// <summary>Close the panel: it shrinks back to where it opened from, then hides.</summary>
     public void Dismiss()
     {
@@ -145,6 +161,7 @@ public partial class ControlPanel : Window
         Width = CompactWidth;
         // Reopened while shrinking away: that exit no longer hides the panel.
         var opening = !IsVisible || _leaving;
+        if (!IsVisible) ShowSettings(false); // always opens on the speakers
         _leaving = false;
         if (opening)
         {
@@ -203,7 +220,7 @@ public partial class ControlPanel : Window
                     .RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
         }, DispatcherPriority.Loaded);
     }
-    private void OnKeyDown(object sender, KeyEventArgs args) { if (args.Key == Key.Escape) { Dismiss(); args.Handled = true; } }
+    private void OnKeyDown(object sender, KeyEventArgs args) { if (args.Key == Key.Escape) { if (_settings) ShowSettings(false); else Dismiss(); args.Handled = true; } }
     private void OnClosing(object? sender, CancelEventArgs args) { if (!_allowClose) { args.Cancel = true; Dismiss(); } }
     private void OnQuit(object sender, RoutedEventArgs args) => QuitRequested?.Invoke();
     private void OnReceiversChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs args)

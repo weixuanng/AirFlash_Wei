@@ -164,10 +164,34 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
     /// green dot on the speaker's row says all there is to say.</summary>
     public bool ShowStatus => StatusTone != "live";
     /// <summary>Drives the Dynamic Island style error pop-up at the top of the panel.</summary>
-    public bool IslandActive => EngineFailed || StatusTone == "error";
-    public string IslandTitle => EngineFailed ? L.Get("Could not start the audio engine.") : StatusTitle;
+    /// <summary>What the island shows: an error, or what the connection is doing
+    /// (busy, wait, live, standby). Empty while there is nothing to say.</summary>
+    public string IslandTone => EngineFailed ? "error" : StatusTone switch
+    {
+        "error" => "error", "busy" => "busy", "wait" => "wait",
+        "live" => _snapshot.State == PlaybackState.Standby ? "standby" : "live",
+        _ => ""
+    };
+    public bool IslandActive => IslandTone.Length > 0;
+    public string IslandTitle => EngineFailed ? L.Get("Could not start the audio engine.")
+        : IslandTone == "live" && _snapshot.Receiver is { } playing ? playing.Name : StatusTitle;
     public string IslandMessage => EngineFailed ? _engine?.Error ?? "" : ActionHint.Length > 0 ? ActionHint : StatusDetail;
-    private void NotifyIsland() { Notify(nameof(IslandActive)); Notify(nameof(IslandTitle)); Notify(nameof(IslandMessage)); }
+    private void NotifyIsland() { Notify(nameof(IslandTone)); Notify(nameof(IslandActive)); Notify(nameof(IslandTitle)); Notify(nameof(IslandMessage)); }
+    /// <summary>After a few minutes without sound the speaker is let go, and taken
+    /// back when sound plays again. The engine does the listening and the release.</summary>
+    public bool StandbyEnabled
+    {
+        get => _settings.StandbyEnabled;
+        set
+        {
+            if (value == _settings.StandbyEnabled) return;
+            _settings.StandbyEnabled = value;
+            if (value) _settings.StandbySilenceSeconds = StandbyAfterSeconds;
+            AppPaths.Log($"Setting standby={value}");
+            Notify(); VolumeChanged();
+        }
+    }
+    private const double StandbyAfterSeconds = 180;
     public string StatusTitle => IsStopping ? L.Get("Disconnecting…") : Session.NeedsCleanup ? L.Get("Connection error") : _snapshot.State switch { PlaybackState.Connecting => L.Get("Connecting"), PlaybackState.Streaming => _snapshot.Receiver is { } connected ? L.Format("Connected to {0}", connected.Name) : L.Get("Playing"), PlaybackState.Standby => L.Get("Standby"), PlaybackState.Pairing => L.Get("Pairing"), PlaybackState.Error => L.Get("Connection error"), PlaybackState.Preempted => Session.IsYielding ? (Session.YieldedToOtherDevice ? L.Get("Playing on another device") : L.Get("Waiting for the speaker")) : L.Get("Taken over by another device"), _ => L.Get("Ready") };
     /// <summary>The session owns a receiver: playing, connecting, or quietly
     /// waiting for it after another device took it over.</summary>

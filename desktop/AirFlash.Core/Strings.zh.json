@@ -406,5 +406,9 @@
   "Some audio is being sent again. Wi-Fi is dropping packets.": "部分音频正在重新发送。Wi-Fi 正在丢包。",
   "Audio is being lost on the way. Move the PC or the speaker closer to the router, or set Delay to Most stable.": "音频在传输途中丢失。请将电脑或扬声器移近路由器，或将延迟设为“最稳定”。",
   "Blur what is behind the panel": "模糊面板后面的内容",
-  "Shows a blurred view of the screen through the panel. Turn it off if the panel looks wrong.": "透过面板显示模糊的屏幕画面。如果面板显示异常，请关闭此项。"
+  "Shows a blurred view of the screen through the panel. Turn it off if the panel looks wrong.": "透过面板显示模糊的屏幕画面。如果面板显示异常，请关闭此项。",
+  "Back": "返回",
+  "Advanced": "高级",
+  "Release the speaker when silent": "无声时释放扬声器",
+  "After three minutes without sound, Airplay lets go of the speaker so other devices can use it, and reconnects when sound plays again. The first moment of that sound is not heard.": "三分钟没有声音后，Airplay 会释放扬声器，以便其他设备使用，并在再次播放声音时重新连接。那段声音的最初片刻听不到。"
 }
