@@ -47,17 +47,17 @@
         <ContentControl Style="{StaticResource ToneIcon}" Tag="{Binding Tone, ElementName=Root}" VerticalAlignment="Center"/>
         <TextBlock x:Name="CompactText" Foreground="White" FontSize="11" FontWeight="SemiBold" Margin="7,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="74"/>
       </StackPanel>
-      <Grid x:Name="Expanded" Margin="14,0,16,0" Opacity="0" VerticalAlignment="Center" IsHitTestVisible="False">
+      <Grid x:Name="Expanded" Margin="12,0,12,0" Opacity="0" VerticalAlignment="Center" IsHitTestVisible="False">
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="Auto"/>
           <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
-        <Viewbox Width="26" Height="26" VerticalAlignment="Center">
+        <Viewbox Width="22" Height="22" VerticalAlignment="Center">
           <ContentControl Style="{StaticResource ToneIcon}" Tag="{Binding Tone, ElementName=Root}"/>
         </Viewbox>
-        <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+        <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
           <TextBlock x:Name="TitleText" Foreground="White" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-          <TextBlock x:Name="MessageText" Foreground="#C7C7CC" FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="34"/>
+          <TextBlock x:Name="MessageText" Foreground="#C7C7CC" FontSize="11.5" Margin="0,2,0,0" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="46"/>
         </StackPanel>
       </Grid>
     </Grid>

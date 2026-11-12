@@ -138,6 +138,7 @@ public partial class ControlPanel : Window
         var (page, other) = (show ? Visibility.Visible : Visibility.Collapsed, show ? Visibility.Collapsed : Visibility.Visible);
         SettingsPage.Visibility = SettingsTitle.Visibility = page;
         MainTitle.Visibility = SettingsButton.Visibility = NoticeArea.Visibility = DeviceScroll.Visibility = ControlsArea.Visibility = other;
+        if (!IsVisible) return; // set up for the next opening; nothing to animate
         // Each page comes in from its own side: settings from the right, the speakers from the left.
         // Focus follows only for keyboard users; after a click it would just draw a focus ring.
         var keyboard = InputManager.Current.MostRecentInputDevice is KeyboardDevice;
@@ -222,7 +223,7 @@ public partial class ControlPanel : Window
                     .RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
         }, DispatcherPriority.Loaded);
     }
-    private void OnKeyDown(object sender, KeyEventArgs args) { if (args.Key == Key.Escape) { if (_settings) ShowSettings(false); else Dismiss(); args.Handled = true; } }
+    private void OnKeyDown(object sender, KeyEventArgs args) { if (args.Key == Key.Escape) { if (DelayOption.IsDropDownOpen) return; if (_settings) ShowSettings(false); else Dismiss(); args.Handled = true; } }
     private void OnClosing(object? sender, CancelEventArgs args) { if (!_allowClose) { args.Cancel = true; Dismiss(); } }
     private void OnQuit(object sender, RoutedEventArgs args) => QuitRequested?.Invoke();
     private void OnReceiversChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs args)

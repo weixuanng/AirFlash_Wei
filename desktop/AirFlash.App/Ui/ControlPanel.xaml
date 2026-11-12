@@ -239,6 +239,8 @@
             <TextBlock Text="{Binding PrimaryLabel}" VerticalAlignment="Center" MaxWidth="230" TextTrimming="CharacterEllipsis" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"/>
           </StackPanel>
         </Button>
+        <!-- With nothing connected the island is away; this line says what to do next. -->
+        <TextBlock x:Name="IdleHint" Text="{Binding StatusDetail}" Style="{StaticResource Hint}" Margin="6,0,6,2" TextWrapping="Wrap" Visibility="{Binding ShowStatus, Converter={StaticResource BoolVisibility}}"/>
         <TextBlock x:Name="PairingActionHint" Text="{Binding ActionHint, NotifyOnTargetUpdated=True}" Style="{StaticResource Hint}" Margin="15,2,0,0" TextWrapping="Wrap" Visibility="{Binding ActionHint, Converter={StaticResource NonEmpty}}" AutomationProperties.Name="{Binding ActionHint}" AutomationProperties.LiveSetting="Polite" TargetUpdated="OnActionHintUpdated"/>
         <Button Content="{loc:Text 'Reconnect'}" Command="{Binding ReconnectCommand}" Visibility="{Binding CanReconnect, Converter={StaticResource BoolVisibility}}" HorizontalAlignment="Left" Margin="15,8,0,0" Padding="12,4" AutomationProperties.Name="{loc:Text 'Reconnect'}"/>
         <Expander Header="{loc:Text 'View error details'}" Visibility="{Binding ErrorDetails, Converter={StaticResource NonEmpty}}" Margin="0,8,0,0">
@@ -280,9 +282,9 @@
           </StackPanel>
         </Border>
       </StackPanel>
-      <!-- The status island sits over the middle of the header, a little right of centre so
-           the compact pill clears the title, and grows from its own centre. -->
-      <loc:ErrorIsland x:Name="Island" Grid.RowSpan="4" Panel.ZIndex="10" HorizontalAlignment="Center" Margin="22,-8,0,0" IsOpen="{Binding IslandActive}" Tone="{Binding IslandTone}" Title="{Binding IslandTitle}" Message="{Binding IslandMessage}"/>
+      <!-- The status island sits over the middle of the header and grows from its own
+           centre. Its widths are chosen to clear the header buttons (ErrorIsland.xaml.cs). -->
+      <loc:ErrorIsland x:Name="Island" Grid.RowSpan="4" Panel.ZIndex="10" HorizontalAlignment="Center" Margin="0,-8,0,0" IsOpen="{Binding IslandActive}" Tone="{Binding IslandTone}" Title="{Binding IslandTitle}" Message="{Binding IslandMessage}"/>
     </Grid>
   </Border>
 </Window>
