@@ -82,13 +82,13 @@ public sealed class ThemeService : IDisposable
         // edge, and the cards on it are thin frosted layers, not solid tiles.
         var light = palette.IsDark ? Colors.White : Colors.White;
         var body = palette.Canvas;
-        SetGradient("GlassBrush", (WithAlpha(Lift(body, palette.IsDark ? 22 : 0), 0xD9), 0), (WithAlpha(body, 0xD9), 0.45), (WithAlpha(body, 0xE6), 1));
+        SetGradient("GlassBrush", (WithAlpha(Lift(body, palette.IsDark ? 34 : 0), 0xC7), 0), (WithAlpha(body, 0xCC), 0.45), (WithAlpha(body, 0xDB), 1));
         // What the card is tinted with once Windows is blurring what lies behind it.
-        SetGradient("GlassClearBrush", (WithAlpha(Lift(body, palette.IsDark ? 22 : 0), 0x8C), 0), (WithAlpha(body, 0x99), 0.45), (WithAlpha(body, 0xAD), 1));
-        SetGradient("GlassEdgeBrush", (WithAlpha(light, palette.IsDark ? (byte)0x66 : (byte)0xF2), 0), (WithAlpha(light, palette.IsDark ? (byte)0x1A : (byte)0x99), 0.5), (WithAlpha(light, palette.IsDark ? (byte)0x33 : (byte)0xCC), 1));
-        SetGradient("GlassCardBrush", (WithAlpha(light, palette.IsDark ? (byte)0x1F : (byte)0xB8), 0), (WithAlpha(light, palette.IsDark ? (byte)0x0F : (byte)0x8C), 1));
+        SetGradient("GlassClearBrush", (WithAlpha(Lift(body, palette.IsDark ? 34 : 0), 0x59), 0), (WithAlpha(body, 0x6B), 0.45), (WithAlpha(body, 0x85), 1));
+        SetGradient("GlassEdgeBrush", (WithAlpha(light, palette.IsDark ? (byte)0xA6 : (byte)0xFF), 0), (WithAlpha(light, palette.IsDark ? (byte)0x26 : (byte)0x99), 0.5), (WithAlpha(light, palette.IsDark ? (byte)0x52 : (byte)0xD9), 1));
+        SetGradient("GlassCardBrush", (WithAlpha(light, palette.IsDark ? (byte)0x30 : (byte)0xC4), 0), (WithAlpha(light, palette.IsDark ? (byte)0x12 : (byte)0x80), 1));
         SetGradient("GlassActiveBrush", (WithAlpha(palette.Accent, palette.IsDark ? (byte)0x57 : (byte)0x38), 0), (WithAlpha(palette.Accent, palette.IsDark ? (byte)0x2E : (byte)0x1F), 1));
-        SetGradient("GlassSheenBrush", (WithAlpha(light, palette.IsDark ? (byte)0x24 : (byte)0x80), 0), (WithAlpha(light, 0), 1));
+        SetGradient("GlassSheenBrush", (WithAlpha(light, palette.IsDark ? (byte)0x3D : (byte)0x99), 0), (WithAlpha(light, palette.IsDark ? (byte)0x0F : (byte)0x26), 0.4), (WithAlpha(light, 0), 1));
 
         ApplyFluentResources(palette);
         ThemeChanged?.Invoke(palette);

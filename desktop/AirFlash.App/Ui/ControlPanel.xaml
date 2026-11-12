@@ -73,13 +73,21 @@
           <ColumnDefinition Width="*"/>
           <ColumnDefinition Width="Auto"/>
         </Grid.ColumnDefinitions>
-        <StackPanel Orientation="Horizontal">
+        <StackPanel x:Name="MainTitle" Orientation="Horizontal">
           <Image Source="{StaticResource AppLogo}" Width="22" Height="22" VerticalAlignment="Center" Margin="0,1,8,0"/>
           <TextBlock Text="Airplay" FontFamily="{StaticResource DisplayFont}" FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center"/>
         </StackPanel>
-        <Button Grid.Column="1" Style="{StaticResource IconButton}" ToolTip="{loc:Text 'Quit'}" AutomationProperties.Name="{loc:Text 'Quit'}" Click="OnQuit" Margin="0,0,0,0"><Viewbox Width="18" Height="18"><Path Data="M 10,3 L 3,3 3,21 10,21 M 8,12 L 22,12 M 17,7 L 22,12 17,17" Stroke="{DynamicResource TextBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/></Viewbox></Button>
+        <!-- The settings page's own header: back to the speakers. -->
+        <StackPanel x:Name="SettingsTitle" Orientation="Horizontal" Visibility="Collapsed" Margin="-6,0,0,0">
+          <Button x:Name="BackButton" Style="{StaticResource IconButton}" ToolTip="{loc:Text 'Back'}" AutomationProperties.Name="{loc:Text 'Back'}" Click="OnSettingsBack"><Viewbox Width="18" Height="18"><Path Width="24" Height="24" Data="M 15,5 L 8,12 15,19" Stroke="{DynamicResource AccentBrush}" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/></Viewbox></Button>
+          <TextBlock Text="{loc:Text 'Settings'}" FontFamily="{StaticResource DisplayFont}" FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center" Margin="2,0,0,0"/>
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal">
+          <Button x:Name="SettingsButton" Style="{StaticResource IconButton}" ToolTip="{loc:Text 'Settings'}" AutomationProperties.Name="{loc:Text 'Settings'}" Click="OnSettingsOpen"><Viewbox Width="18" Height="18"><Path Width="24" Height="24" Stroke="{DynamicResource TextBrush}" StrokeThickness="1.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M 4,7 H 11 M 15,7 H 20 M 4,12 H 7 M 11,12 H 20 M 4,17 H 13 M 17,17 H 20 M 13,7 m -2,0 a 2,2 0 1 0 4,0 a 2,2 0 1 0 -4,0 M 9,12 m -2,0 a 2,2 0 1 0 4,0 a 2,2 0 1 0 -4,0 M 15,17 m -2,0 a 2,2 0 1 0 4,0 a 2,2 0 1 0 -4,0"/></Viewbox></Button>
+          <Button Style="{StaticResource IconButton}" ToolTip="{loc:Text 'Quit'}" AutomationProperties.Name="{loc:Text 'Quit'}" Click="OnQuit" Margin="0,0,0,0"><Viewbox Width="18" Height="18"><Path Data="M 10,3 L 3,3 3,21 10,21 M 8,12 L 22,12 M 17,7 L 22,12 17,17" Stroke="{DynamicResource TextBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/></Viewbox></Button>
+        </StackPanel>
       </Grid>
-      <StackPanel Grid.Row="1">
+      <StackPanel x:Name="NoticeArea" Grid.Row="1">
       <Border Padding="12,10" CornerRadius="10" Background="{DynamicResource TintBrush}" Margin="0,0,0,12" Visibility="{Binding Notice, Converter={StaticResource NonEmpty}}">
         <TextBlock Text="{Binding Notice}" Style="{StaticResource Hint}"/>
       </Border>
@@ -194,7 +202,7 @@
           <Button x:Name="ShowHidden" Click="ShowHidden_Click" Content="{Binding ShowHiddenLabel}" Visibility="{Binding HasHidden, Converter={StaticResource BoolVisibility}}" HorizontalAlignment="Left" Margin="4,0,0,8" Padding="0" MinHeight="0" Background="Transparent" BorderThickness="0" Cursor="Hand" Foreground="{DynamicResource AccentBrush}" FontSize="12"/>
         </StackPanel>
       </ScrollViewer>
-      <StackPanel Grid.Row="3" Margin="2,4,2,0">
+      <StackPanel x:Name="ControlsArea" Grid.Row="3" Margin="2,4,2,0">
         <!-- The speaker's own volume; shown only while it reports one. -->
         <Grid x:Name="VolumeRow" Margin="4,0,4,10" Visibility="{Binding VolumeAvailable, Converter={StaticResource BoolVisibility}}">
           <Grid.ColumnDefinitions>
@@ -231,45 +239,8 @@
             <TextBlock Text="{Binding PrimaryLabel}" VerticalAlignment="Center" MaxWidth="230" TextTrimming="CharacterEllipsis" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"/>
           </StackPanel>
         </Button>
-        <!-- Two choices that trade something for robustness; both are off by default. -->
-        <StackPanel x:Name="OptionsRow" Margin="6,0,6,8">
-          <Grid Margin="0,0,0,8">
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="Auto"/>
-              <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-            <TextBlock Text="{loc:Text 'Delay'}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-            <ComboBox x:Name="DelayOption" Grid.Column="1" SelectedIndex="{Binding DelayMode, Mode=TwoWay}" ToolTip="{loc:Text 'Auto starts at the shortest delay the speaker can play and steps it up only if the stream has trouble. Most stable gives lost packets time to be sent again.'}" AutomationProperties.Name="{loc:Text 'Delay'}">
-              <ComboBoxItem Content="{loc:Text 'Auto (adapts)'}"/>
-              <ComboBoxItem Content="{loc:Text 'Balanced'}"/>
-              <ComboBoxItem Content="{loc:Text 'Most stable'}"/>
-            </ComboBox>
-          </Grid>
-          <CheckBox x:Name="BlurOption" IsChecked="{Binding PanelBlurEnabled, Mode=TwoWay}" Content="{loc:Text 'Blur what is behind the panel'}" ToolTip="{loc:Text 'Shows a blurred view of the screen through the panel. Turn it off if the panel looks wrong.'}" Margin="0,0,0,6"/>
-          <CheckBox x:Name="VolumeKeysOption" IsChecked="{Binding VolumeKeysEnabled, Mode=TwoWay}" Content="{loc:Text 'Volume keys control the speaker'}" ToolTip="{loc:Text 'While connected, the keyboard volume keys change the speaker instead of this PC.'}" Margin="0,0,0,6"/>
-          <CheckBox x:Name="DirectCaptureOption" IsChecked="{Binding DirectCapture, Mode=TwoWay}" IsEnabled="{Binding DirectCaptureAvailable}" Content="{loc:Text 'Capture apps directly'}" ToolTip="{loc:Text 'Takes audio from apps before the PC speakers, so the PC can stay muted. Turn off if the speaker goes silent.'}"/>
-        </StackPanel>
-        <!-- Shown while there is something to say: connecting, waiting, an error.
-             A live connection is marked on the speaker's own row instead. -->
-        <StackPanel x:Name="StatusBlock" Visibility="{Binding ShowStatus, Converter={StaticResource BoolVisibility}}">
-        <DockPanel>
-          <Ellipse Width="8" Height="8" Margin="0,0,7,0" VerticalAlignment="Center" loc:Motion.Breathe="{Binding StatusBusy}">
-            <Ellipse.Style>
-              <Style TargetType="Ellipse">
-                <Setter Property="Fill" Value="{DynamicResource MutedBrush}"/>
-                <Style.Triggers>
-                  <DataTrigger Binding="{Binding StatusTone}" Value="live"><Setter Property="Fill" Value="{DynamicResource SuccessBrush}"/></DataTrigger>
-                  <DataTrigger Binding="{Binding StatusTone}" Value="busy"><Setter Property="Fill" Value="{DynamicResource AccentBrush}"/></DataTrigger>
-                  <DataTrigger Binding="{Binding StatusTone}" Value="wait"><Setter Property="Fill" Value="{DynamicResource WarningBrush}"/></DataTrigger>
-                  <DataTrigger Binding="{Binding StatusTone}" Value="error"><Setter Property="Fill" Value="{DynamicResource ErrorBrush}"/></DataTrigger>
-                </Style.Triggers>
-              </Style>
-            </Ellipse.Style>
-          </Ellipse>
-          <TextBlock Text="{Binding StatusTitle, NotifyOnTargetUpdated=True}" FontWeight="SemiBold" FontSize="12" loc:Motion.FadeOnUpdate="True"/>
-        </DockPanel>
-        <TextBlock x:Name="StatusDetailText" Text="{Binding StatusDetail}" Style="{StaticResource Hint}" Margin="15,4,0,0" MaxHeight="84" TextTrimming="CharacterEllipsis" ToolTip="{Binding StatusDetail}" Visibility="{Binding StatusDetail, Converter={StaticResource NonEmpty}}"/>
-        </StackPanel>
+        <!-- With nothing connected the island is away; this line says what to do next. -->
+        <TextBlock x:Name="IdleHint" Text="{Binding StatusDetail}" Style="{StaticResource Hint}" Margin="6,0,6,2" TextWrapping="Wrap" Visibility="{Binding ShowStatus, Converter={StaticResource BoolVisibility}}"/>
         <TextBlock x:Name="PairingActionHint" Text="{Binding ActionHint, NotifyOnTargetUpdated=True}" Style="{StaticResource Hint}" Margin="15,2,0,0" TextWrapping="Wrap" Visibility="{Binding ActionHint, Converter={StaticResource NonEmpty}}" AutomationProperties.Name="{Binding ActionHint}" AutomationProperties.LiveSetting="Polite" TargetUpdated="OnActionHintUpdated"/>
         <Button Content="{loc:Text 'Reconnect'}" Command="{Binding ReconnectCommand}" Visibility="{Binding CanReconnect, Converter={StaticResource BoolVisibility}}" HorizontalAlignment="Left" Margin="15,8,0,0" Padding="12,4" AutomationProperties.Name="{loc:Text 'Reconnect'}"/>
         <Expander Header="{loc:Text 'View error details'}" Visibility="{Binding ErrorDetails, Converter={StaticResource NonEmpty}}" Margin="0,8,0,0">
@@ -278,9 +249,42 @@
           </ScrollViewer>
         </Expander>
       </StackPanel>
-      <!-- Errors spring open here, over the header, like the Dynamic Island. It sits
-           against the Quit button's left edge and grows leftwards, so Quit stays clickable. -->
-      <loc:ErrorIsland Grid.RowSpan="4" Panel.ZIndex="10" Margin="0,-8,40,0" IsOpen="{Binding IslandActive}" Title="{Binding IslandTitle}" Message="{Binding IslandMessage}"/>
+      <!-- Settings live one level down, behind the header's settings button, in grouped
+           lists as in iOS Settings. -->
+      <StackPanel x:Name="SettingsPage" Grid.Row="1" Grid.RowSpan="3" Visibility="Collapsed" Margin="2,0,2,2">
+        <TextBlock Text="{loc:Text 'Playback'}" Style="{StaticResource Hint}" FontWeight="SemiBold" Margin="12,2,0,6"/>
+        <Border CornerRadius="14" BorderThickness="1" Padding="14,2" Background="{DynamicResource GlassCardBrush}" BorderBrush="{DynamicResource GlassEdgeBrush}">
+          <StackPanel x:Name="OptionsRow">
+            <Grid MinHeight="46">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+              </Grid.ColumnDefinitions>
+              <TextBlock Text="{loc:Text 'Delay'}" VerticalAlignment="Center"/>
+              <ComboBox x:Name="DelayOption" Grid.Column="1" Width="150" VerticalAlignment="Center" SelectedIndex="{Binding DelayMode, Mode=TwoWay}" ToolTip="{loc:Text 'Auto starts at the shortest delay the speaker can play and steps it up only if the stream has trouble. Most stable gives lost packets time to be sent again.'}" AutomationProperties.Name="{loc:Text 'Delay'}">
+              <ComboBoxItem Content="{loc:Text 'Auto (adapts)'}"/>
+              <ComboBoxItem Content="{loc:Text 'Balanced'}"/>
+              <ComboBoxItem Content="{loc:Text 'Most stable'}"/>
+            </ComboBox>
+            </Grid>
+            <Border Height="1" Background="{DynamicResource GlassEdgeBrush}" Opacity="0.55" SnapsToDevicePixels="True"/>
+            <CheckBox x:Name="StandbyOption" Style="{StaticResource Switch}" IsChecked="{Binding StandbyEnabled, Mode=TwoWay}" Content="{loc:Text 'Release the speaker when silent'}" ToolTip="{loc:Text 'After three minutes without sound, Airplay lets go of the speaker so other devices can use it, and reconnects when sound plays again. The first moment of that sound is not heard.'}"/>
+            <Border Height="1" Background="{DynamicResource GlassEdgeBrush}" Opacity="0.55" SnapsToDevicePixels="True"/>
+            <CheckBox Style="{StaticResource Switch}" x:Name="VolumeKeysOption" IsChecked="{Binding VolumeKeysEnabled, Mode=TwoWay}" Content="{loc:Text 'Volume keys control the speaker'}" ToolTip="{loc:Text 'While connected, the keyboard volume keys change the speaker instead of this PC.'}"/>
+          </StackPanel>
+        </Border>
+        <TextBlock Text="{loc:Text 'Advanced'}" Style="{StaticResource Hint}" FontWeight="SemiBold" Margin="12,14,0,6"/>
+        <Border CornerRadius="14" BorderThickness="1" Padding="14,2" Background="{DynamicResource GlassCardBrush}" BorderBrush="{DynamicResource GlassEdgeBrush}">
+          <StackPanel>
+            <CheckBox Style="{StaticResource Switch}" x:Name="BlurOption" IsChecked="{Binding PanelBlurEnabled, Mode=TwoWay}" Content="{loc:Text 'Blur what is behind the panel'}" ToolTip="{loc:Text 'Shows a blurred view of the screen through the panel. Turn it off if the panel looks wrong.'}"/>
+            <Border Height="1" Background="{DynamicResource GlassEdgeBrush}" Opacity="0.55" SnapsToDevicePixels="True"/>
+            <CheckBox Style="{StaticResource Switch}" x:Name="DirectCaptureOption" IsChecked="{Binding DirectCapture, Mode=TwoWay}" IsEnabled="{Binding DirectCaptureAvailable}" Content="{loc:Text 'Capture apps directly'}" ToolTip="{loc:Text 'Takes audio from apps before the PC speakers, so the PC can stay muted. Turn off if the speaker goes silent.'}"/>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+      <!-- The status island sits over the middle of the header and grows from its own
+           centre. Its widths are chosen to clear the header buttons (ErrorIsland.xaml.cs). -->
+      <loc:ErrorIsland x:Name="Island" Grid.RowSpan="4" Panel.ZIndex="10" HorizontalAlignment="Center" Margin="0,-8,0,0" IsOpen="{Binding IslandActive}" Tone="{Binding IslandTone}" Title="{Binding IslandTitle}" Message="{Binding IslandMessage}"/>
     </Grid>
   </Border>
 </Window>

@@ -8,15 +8,29 @@ using System.Windows.Media.Animation;
 using System.Windows.Threading;
 namespace AirFlash.App.Ui;
 
-/// <summary>Error pop-up shaped like the iPhone Dynamic Island. It springs open
-/// when <see cref="IsOpen"/> turns true, settles to a compact pill after a few
-/// seconds, expands again on click and shrinks away when the error clears.
+/// <summary>The panel's status island, shaped like the iPhone Dynamic Island. It
+/// appears when <see cref="IsOpen"/> turns true as a compact pill sized to its
+/// text. An error (<see cref="Tone"/> "error") springs open with its message and
+/// settles back after a few seconds; any state opens and closes on click, and the
+/// pill shrinks away when there is nothing to show.
 /// Only sizes, opacity and a render scale animate; nothing runs while closed.</summary>
 public partial class ErrorIsland : UserControl
 {
-    private const double CompactWidth = 132, CompactHeight = 32;
-    // The panel's content is 290 DIP wide; this stops 40 DIP short, left of Quit.
-    private const double ExpandedWidth = 248, ExpandedHeight = 72;
+    private const double CompactHeight = 32, MinCompact = 56, MaxCompact = 112;
+    // The panel's content is 290 DIP wide and the island is centred in it. Open, it
+    // spans 70 to 220: over the title, as the iPhone's covers its status bar, but short
+    // of the settings button at 222, which must stay reachable under a lasting error.
+    private const double ExpandedWidth = 150, ExpandedHeight = 88;
+    /// <summary>The compact pill hugs its mark and text.</summary>
+    private double CompactWidth
+    {
+        get
+        {
+            Compact.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            return Math.Clamp(Math.Ceiling(Compact.DesiredSize.Width), MinCompact, MaxCompact);
+        }
+    }
+    private bool Alarming => Tone == "error";
     private static readonly TimeSpan Settle = TimeSpan.FromSeconds(4.5);
     private static readonly TimeSpan Quick = TimeSpan.FromMilliseconds(220);
     private readonly DispatcherTimer _settle;
@@ -27,6 +41,8 @@ public partial class ErrorIsland : UserControl
         nameof(IsOpen), typeof(bool), typeof(ErrorIsland), new PropertyMetadata(false, (d, _) => ((ErrorIsland)d).Sync(replay: false)));
     public static readonly DependencyProperty TitleProperty = DependencyProperty.Register(
         nameof(Title), typeof(string), typeof(ErrorIsland), new PropertyMetadata("", (d, e) => ((ErrorIsland)d).TitleChanged((string?)e.OldValue)));
+    public static readonly DependencyProperty ToneProperty = DependencyProperty.Register(
+        nameof(Tone), typeof(string), typeof(ErrorIsland), new PropertyMetadata("", (d, e) => ((ErrorIsland)d).ToneChanged(!Equals(e.OldValue, e.NewValue))));
     public static readonly DependencyProperty MessageProperty = DependencyProperty.Register(
         nameof(Message), typeof(string), typeof(ErrorIsland), new PropertyMetadata("", (d, _) => ((ErrorIsland)d).UpdateText()));
     /// <summary>Animatable corner radius; CornerRadius itself is not a double.</summary>
@@ -36,6 +52,8 @@ public partial class ErrorIsland : UserControl
     public bool IsOpen { get => (bool)GetValue(IsOpenProperty); set => SetValue(IsOpenProperty, value); }
     public string Title { get => (string)GetValue(TitleProperty); set => SetValue(TitleProperty, value); }
     public string Message { get => (string)GetValue(MessageProperty); set => SetValue(MessageProperty, value); }
+    /// <summary>error, wait, busy, live or standby: picks the mark, and whether the island opens by itself.</summary>
+    public string Tone { get => (string)GetValue(ToneProperty); set => SetValue(ToneProperty, value); }
 
     public ErrorIsland()
     {
@@ -53,15 +71,27 @@ public partial class ErrorIsland : UserControl
     private void TitleChanged(string? previous)
     {
         UpdateText();
-        // A different error while open opens the island again.
-        if (IsOpen && IsVisible && !string.Equals(previous, Title, StringComparison.Ordinal)) Morph(expanded: true);
+        Restate(changed: !string.Equals(previous, Title, StringComparison.Ordinal));
+    }
+    /// <summary>The wording changed while showing: a new error opens the island
+    /// again, anything else re-fits the pill (or stays open, if opened by hand).</summary>
+    private void Restate(bool changed)
+    {
+        if (changed && IsOpen && IsVisible) Morph(expanded: Alarming || _expanded);
+    }
+    /// <summary>A different state: only an error is open by itself. An island left
+    /// open by an earlier error closes, so it cannot sit open over the header for good.</summary>
+    private void ToneChanged(bool changed)
+    {
+        if (changed && IsOpen && IsVisible) Morph(expanded: Alarming);
     }
     private void UpdateText()
     {
         CompactText.Text = Title;
         TitleText.Text = Title;
         MessageText.Text = Message;
-        Pill.ToolTip = Message.Length > 0 ? Message : null;
+        // The pill trims long wording; the tooltip always has all of it.
+        Pill.ToolTip = Message.Length > 0 ? $"{Title}\n{Message}" : Title.Length > 0 ? Title : null;
         AutomationProperties.SetName(this, Message.Length > 0 ? $"{Title}. {Message}" : Title);
         if (IsOpen) Announce();
     }
@@ -103,13 +133,13 @@ public partial class ErrorIsland : UserControl
             if (Visibility != Visibility.Visible || replay)
             {
                 Visibility = Visibility.Visible;
-                Snap(CompactWidth - 40, CompactHeight - 6, compact: 0, expanded: 0, scale: Motion.Active ? 0.6 : 1, opacity: Motion.Active ? 0 : 1);
+                Snap(MinCompact, CompactHeight - 6, compact: 0, expanded: 0, scale: Motion.Active ? 0.6 : 1, opacity: Motion.Active ? 0 : 1);
             }
             // Also reverses a close that is still fading out.
             if (Motion.Active) Animate(Pill, OpacityProperty, 1, Quick, Motion.EaseOut);
             else { Pill.BeginAnimation(OpacityProperty, null); Pill.Opacity = 1; }
             AnimateScale(1);
-            Morph(expanded: true);
+            Morph(expanded: Alarming);
             Announce();
         }
         else if (Visibility == Visibility.Visible) Close();
@@ -119,13 +149,14 @@ public partial class ErrorIsland : UserControl
     {
         _expanded = expanded;
         _settle.Stop();
-        if (expanded && IsVisible) _settle.Start();
+        // Only an error closes itself again; a state opened by hand stays until clicked.
+        if (expanded && Alarming && IsVisible) _settle.Start();
         var width = expanded ? ExpandedWidth : CompactWidth;
         var height = expanded ? ExpandedHeight : CompactHeight;
         if (!Motion.Active) { Snap(width, height, expanded ? 0 : 1, expanded ? 1 : 0, 1, 1); return; }
-        Animate(Pill, WidthProperty, width, Motion.Spring, Motion.SpringCurve);
-        Animate(Pill, HeightProperty, height, Motion.Spring, Motion.SpringCurve);
-        Animate(this, RadiusProperty, expanded ? 24 : CompactHeight / 2, Motion.Spring, Motion.SpringCurve);
+        Animate(Pill, WidthProperty, width, Motion.IslandTime, Motion.IslandCurve);
+        Animate(Pill, HeightProperty, height, Motion.IslandTime, Motion.IslandCurve);
+        Animate(this, RadiusProperty, expanded ? 24 : CompactHeight / 2, Motion.IslandTime, Motion.IslandCurve);
         // Content crossfades: the outgoing layer leaves fast, the incoming one waits a beat.
         Animate(Compact, OpacityProperty, expanded ? 0 : 1, Quick, Motion.EaseOut, expanded ? TimeSpan.Zero : Quick);
         Animate(Expanded, OpacityProperty, expanded ? 1 : 0, Quick, Motion.EaseOut, expanded ? Quick : TimeSpan.Zero);
@@ -136,7 +167,7 @@ public partial class ErrorIsland : UserControl
         _settle.Stop();
         _expanded = false;
         if (!Motion.Active) { Visibility = Visibility.Collapsed; return; }
-        Animate(Pill, WidthProperty, CompactWidth - 40, Motion.Spring, Motion.SpringCurve);
+        Animate(Pill, WidthProperty, MinCompact, Motion.Spring, Motion.SpringCurve);
         Animate(Pill, HeightProperty, CompactHeight - 6, Motion.Spring, Motion.SpringCurve);
         Animate(this, RadiusProperty, (CompactHeight - 6) / 2, Motion.Spring, Motion.SpringCurve);
         Animate(Compact, OpacityProperty, 0, Quick, Motion.EaseOut);

@@ -145,6 +145,16 @@ internal static class UiSmoke
                 CheckPanelIcons(panel, app, checks);
                 foreach (var scale in new[] { 1d, 1.25, 1.5, 1.75, 2d }) Render(panel, Path.Combine(directory, $"panel-{(dark ? "dark" : "light")}-{scale * 100}.png"), scale);
                 {
+                    panel.ShowSettings(true); await Pump();
+                    var page = (FrameworkElement)panel.FindName("SettingsPage"); var delay = (FrameworkElement)panel.FindName("DelayOption");
+                    var speakers = (FrameworkElement)panel.FindName("DeviceScroll");
+                    Check(page.IsVisible && !speakers.IsVisible && delay.ActualWidth > 100 && page.ActualHeight > 150,
+                        $"the settings page replaces the speakers and lays out its rows ({(dark ? "dark" : "light")})", checks);
+                    Render(panel, Path.Combine(directory, $"panel-settings-{(dark ? "dark" : "light")}.png"), 2);
+                    panel.ShowSettings(false); await Pump();
+                    Check(!page.IsVisible && speakers.IsVisible, "leaving settings brings the speakers back", checks);
+                }
+                {
                     var hud = new VolumeHud();
                     hud.Present(50); await Pump();
                     var track = (FrameworkElement)hud.FindName("Track"); var fill = (FrameworkElement)hud.FindName("Fill");

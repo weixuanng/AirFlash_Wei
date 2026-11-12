@@ -51,6 +51,10 @@ public static class Motion
     // No overshoot: for a level that must never read past its target.
     private static readonly SpringEase Smooth = new(0.35, 0);
     internal static readonly TimeSpan SmoothTime = Smooth.Settle;
+    // The island's morph, as on the web page (motion.js MORPH_SPRING).
+    private static readonly SpringEase Island = new(0.5, 0.25);
+    internal static readonly TimeSpan IslandTime = Island.Settle;
+    internal static readonly IEasingFunction IslandCurve = Frozen(Island);
     // Fast enough to stay under a dragging pointer without lagging behind it.
     private static readonly SpringEase Quick = new(0.18, 0);
     internal static readonly TimeSpan QuickTime = Quick.Settle;
@@ -299,6 +303,59 @@ public static class Motion
             target.BeginAnimation(UIElement.OpacityProperty, pulse);
         }
         else target.BeginAnimation(UIElement.OpacityProperty, null);
+    }
+
+    // ---- Spin: a busy arc turns while it is on screen.
+    public static readonly DependencyProperty SpinProperty = DependencyProperty.RegisterAttached(
+        "Spin", typeof(bool), typeof(Motion), new PropertyMetadata(false, OnSpinChanged));
+    public static bool GetSpin(DependencyObject element) => (bool)element.GetValue(SpinProperty);
+    public static void SetSpin(DependencyObject element, bool value) => element.SetValue(SpinProperty, value);
+    private static void OnSpinChanged(DependencyObject element, DependencyPropertyChangedEventArgs args)
+    {
+        if (element is not UIElement target) return;
+        target.IsVisibleChanged -= OnSpinVisibleChanged;
+        if (GetSpin(target)) target.IsVisibleChanged += OnSpinVisibleChanged;
+        UpdateSpin(target);
+    }
+    private static void OnSpinVisibleChanged(object sender, DependencyPropertyChangedEventArgs args) { if (sender is UIElement target) UpdateSpin(target); }
+    private static void UpdateSpin(UIElement target)
+    {
+        if (target.RenderTransform is not RotateTransform turn || turn.IsFrozen)
+        {
+            target.RenderTransformOrigin = new Point(0.5, 0.5);
+            target.RenderTransform = turn = new RotateTransform();
+        }
+        if (!(Active && target.IsVisible && GetSpin(target))) { turn.BeginAnimation(RotateTransform.AngleProperty, null); return; }
+        var spin = new DoubleAnimation(0, 360, TimeSpan.FromMilliseconds(900)) { RepeatBehavior = RepeatBehavior.Forever };
+        spin.Freeze();
+        turn.BeginAnimation(RotateTransform.AngleProperty, spin);
+    }
+
+    // ---- Switch: the knob of a toggle glides to its side. Bound to the toggle's
+    // state; the first value (before the knob is on screen) is set without motion.
+    public const double KnobTravel = 16;
+    public static readonly DependencyProperty KnobOnProperty = DependencyProperty.RegisterAttached(
+        "KnobOn", typeof(bool), typeof(Motion), new PropertyMetadata(false, OnKnobChanged));
+    public static bool GetKnobOn(DependencyObject element) => (bool)element.GetValue(KnobOnProperty);
+    public static void SetKnobOn(DependencyObject element, bool value) => element.SetValue(KnobOnProperty, value);
+    private static void OnKnobChanged(DependencyObject element, DependencyPropertyChangedEventArgs args)
+    {
+        if (element is not FrameworkElement knob) return;
+        if (knob.RenderTransform is not TranslateTransform shift || shift.IsFrozen) knob.RenderTransform = shift = new TranslateTransform();
+        var to = args.NewValue is true ? KnobTravel : 0;
+        if (!Active || !knob.IsVisible) { shift.BeginAnimation(TranslateTransform.XProperty, null); shift.X = to; return; }
+        var glide = new DoubleAnimation { To = to, Duration = QuickTime, EasingFunction = QuickCurve };
+        glide.Freeze();
+        shift.BeginAnimation(TranslateTransform.XProperty, glide);
+    }
+
+    // ---- Page change: the incoming page slides in from the side it lives on.
+    public static void SlideIn(FrameworkElement page, double from)
+    {
+        if (page.RenderTransform is not TranslateTransform shift || shift.IsFrozen) page.RenderTransform = shift = new TranslateTransform();
+        if (!Active) { shift.BeginAnimation(TranslateTransform.XProperty, null); shift.X = 0; page.BeginAnimation(UIElement.OpacityProperty, null); return; }
+        shift.BeginAnimation(TranslateTransform.XProperty, To(from, 0, Spring, SpringCurve));
+        page.BeginAnimation(UIElement.OpacityProperty, To(0, 1, Fade, EaseOut));
     }
 
     // ---- Crossfade: text eases in whenever its binding delivers a new value.

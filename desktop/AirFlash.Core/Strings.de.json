@@ -406,5 +406,9 @@
   "Some audio is being sent again. Wi-Fi is dropping packets.": "Ein Teil des Tons wird erneut gesendet. Das WLAN verliert Pakete.",
   "Audio is being lost on the way. Move the PC or the speaker closer to the router, or set Delay to Most stable.": "Ton geht unterwegs verloren. Stelle PC oder Lautsprecher näher an den Router oder setze die Verzögerung auf „Am stabilsten“.",
   "Blur what is behind the panel": "Hintergrund des Fensters weichzeichnen",
-  "Shows a blurred view of the screen through the panel. Turn it off if the panel looks wrong.": "Zeigt den Bildschirm weichgezeichnet durch das Fenster. Ausschalten, falls das Fenster falsch aussieht."
+  "Shows a blurred view of the screen through the panel. Turn it off if the panel looks wrong.": "Zeigt den Bildschirm weichgezeichnet durch das Fenster. Ausschalten, falls das Fenster falsch aussieht.",
+  "Back": "Zurück",
+  "Advanced": "Erweitert",
+  "Release the speaker when silent": "Lautsprecher bei Stille freigeben",
+  "After three minutes without sound, Airplay lets go of the speaker so other devices can use it, and reconnects when sound plays again. The first moment of that sound is not heard.": "Nach drei Minuten ohne Ton gibt Airplay den Lautsprecher frei, damit andere Geräte ihn nutzen können, und verbindet sich wieder, sobald Ton abgespielt wird. Der erste Moment dieses Tons ist nicht zu hören."
 }
