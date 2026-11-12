@@ -260,7 +260,10 @@ public sealed class SessionController(IEngineFactory factory, IAudioService audi
     {
         var options = ProfileOptions(receiver, member, settings);
         var follow = clockStrategy is null ? options.Timing == "follow" || options.Timing == "auto" && member.FollowReceiverClock : clockStrategy != ClockStrategyPlan.Sender;
-        return new { codec = options.Codec, transport = options.Transport, timing = clockStrategy == ClockStrategyPlan.Sender || options.Timing == "follow" ? "ptp" : options.Timing,
+        // Mac mode applies to a HomePod followed on its own clock, which is the only
+        // arrangement the low-latency session has been seen in. It sends PCM, as a Mac does.
+        var mac = settings.MacMode && follow && member.FollowReceiverClock && !receiver.IsGroup;
+        return new { codec = mac ? "pcm" : options.Codec, mac_mode = mac, transport = options.Transport, timing = clockStrategy == ClockStrategyPlan.Sender || options.Timing == "follow" ? "ptp" : options.Timing,
             follow_receiver_clock = follow, clock_strategy = clockStrategy, features = member.Features,
             channel = receiver.IsSoftwareGroup ? member.Channel : "stereo", sync_offset_ms = receiver.IsSoftwareGroup ? member.SyncOffsetMs : 0,
             latency_ms = adaptiveTarget ?? InitialLatency(receiver, member, settings, negotiated) };

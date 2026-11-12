@@ -410,5 +410,11 @@
   "Back": "Zurück",
   "Advanced": "Erweitert",
   "Release the speaker when silent": "Lautsprecher bei Stille freigeben",
-  "After three minutes without sound, Airplay lets go of the speaker so other devices can use it, and reconnects when sound plays again. The first moment of that sound is not heard.": "Nach drei Minuten ohne Ton gibt Airplay den Lautsprecher frei, damit andere Geräte ihn nutzen können, und verbindet sich wieder, sobald Ton abgespielt wird. Der erste Moment dieses Tons ist nicht zu hören."
+  "After three minutes without sound, Airplay lets go of the speaker so other devices can use it, and reconnects when sound plays again. The first moment of that sound is not heard.": "Nach drei Minuten ohne Ton gibt Airplay den Lautsprecher frei, damit andere Geräte ihn nutzen können, und verbindet sich wieder, sobald Ton abgespielt wird. Der erste Moment dieses Tons ist nicht zu hören.",
+  "{0} ms": "{0} ms",
+  "Lower means less lag behind video. If the speaker goes silent, the value is too low for it: raise it.": "Niedriger bedeutet weniger Verzögerung zum Bild. Bleibt der Lautsprecher stumm, ist der Wert zu niedrig: erhöhe ihn.",
+  "Low latency (Mac mode)": "Niedrige Latenz (Mac-Modus)",
+  "Experimental. Connects to a HomePod the way a Mac does and sends uncompressed audio, which may let it play with a shorter delay. Turn it off if the speaker will not connect or stays silent.": "Experimentell. Verbindet sich wie ein Mac mit einem HomePod und sendet unkomprimierten Ton, wodurch eine kürzere Verzögerung möglich sein kann. Ausschalten, wenn der Lautsprecher keine Verbindung herstellt oder stumm bleibt.",
+  "Only show HomePods": "Nur HomePods anzeigen",
+  "Leaves televisions and other AirPlay devices out of the list.": "Lässt Fernseher und andere AirPlay-Geräte aus der Liste weg."
 }

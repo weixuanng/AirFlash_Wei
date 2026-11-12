@@ -107,6 +107,10 @@ public sealed class AppSettings : ObservableObject
     public bool ForceLatency { get => _ForceLatency; set => Set(ref _ForceLatency, value); }
     private int _CustomBufferMs = 1000;
     public int CustomBufferMs { get => _CustomBufferMs; set => Set(ref _CustomBufferMs, value); }
+    /// <summary>Experimental: present this PC to a HomePod as a Mac and send uncompressed
+    /// audio, the arrangement reported to unlock a HomePod mini 2's low-latency mode.</summary>
+    private bool _MacMode;
+    public bool MacMode { get => _MacMode; set => Set(ref _MacMode, value); }
     private bool _StandbyEnabled = false;
     public bool StandbyEnabled { get => _StandbyEnabled; set => Set(ref _StandbyEnabled, value); }
     private double _StandbySilenceSeconds = 10;
@@ -207,7 +211,7 @@ public sealed class AppSettings : ObservableObject
         ResumeAfterTakeover = source.ResumeAfterTakeover; UiLanguage = source.UiLanguage; Theme = source.Theme;
         DiscoveryInterfaceId = source.DiscoveryInterfaceId;
         Equalizer.CopyFrom(source.Equalizer);
-        LatencyMode = source.LatencyMode; CustomBufferMs = source.CustomBufferMs; ForceLatency = source.ForceLatency;
+        LatencyMode = source.LatencyMode; CustomBufferMs = source.CustomBufferMs; ForceLatency = source.ForceLatency; MacMode = source.MacMode;
         StandbyEnabled = source.StandbyEnabled; StandbySilenceSeconds = source.StandbySilenceSeconds;
         CaptureMode = source.CaptureMode; CaptureEndpoint = source.CaptureEndpoint;
         CaptureApplicationPath = source.CaptureApplicationPath; CaptureApplicationInstance = source.CaptureApplicationInstance;

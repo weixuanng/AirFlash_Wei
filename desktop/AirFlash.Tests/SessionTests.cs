@@ -1456,6 +1456,23 @@ public sealed class SessionTests
         return (SoftwareStereo.Resolve([Pod("a"), Pod("b") with { Address = "127.0.0.2" }], settings).Single(), settings);
     }
     [Fact]
+    public async Task MacModeAsksAFollowedHomePodForPcmAsAMacAndLeavesOtherSpeakersAlone()
+    {
+        foreach (var followed in new[] { true, false })
+        {
+            var process = new FakeConnection(); var factory = new FakeFactory(process); var audio = new FakeAudio();
+            var settings = Settings(); settings.MacMode = true; settings.LatencyMode = "custom"; settings.CustomBufferMs = 70;
+            if (followed) settings.Options("a").Timing = "follow";
+            await using var controller = new SessionController(factory, audio, timing: Fast);
+            await controller.StartAsync(Pod("a") with { FollowReceiverClock = followed }, settings);
+            await Until(() => process.Commands.Any(c => c.Command == "start"));
+            var profile = process.Commands.Single(c => c.Command == "start").Parameters.GetProperty("peers")[0].GetProperty("profile");
+            Assert.Equal(followed, profile.GetProperty("mac_mode").GetBoolean());
+            Assert.Equal(followed, profile.Text("codec") == "pcm");
+            Assert.Equal(70, profile.Number("latency_ms"));
+        }
+    }
+    [Fact]
     public async Task ApplicationStandbyKeepsSoftwareGroupProfilesAndMemberVolumeRouting()
     {
         var process = new FakeConnection(); var factory = new FakeFactory(process); var audio = new FakeAudio();
