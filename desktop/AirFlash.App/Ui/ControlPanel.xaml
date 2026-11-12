@@ -200,6 +200,7 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
           <Button x:Name="ShowHidden" Click="ShowHidden_Click" Content="{Binding ShowHiddenLabel}" Visibility="{Binding HasHidden, Converter={StaticResource BoolVisibility}}" HorizontalAlignment="Left" Margin="4,0,0,8" Padding="0" MinHeight="0" Background="Transparent" BorderThickness="0" Cursor="Hand" Foreground="{DynamicResource AccentBrush}" FontSize="12"/>
+          <Button x:Name="ShowFiltered" Click="ShowFiltered_Click" Content="{Binding ShowFilteredLabel}" Visibility="{Binding OfferFiltered, Converter={StaticResource BoolVisibility}}" HorizontalAlignment="Left" Margin="4,0,0,8" Padding="0" MinHeight="0" Background="Transparent" BorderThickness="0" Cursor="Hand" Foreground="{DynamicResource AccentBrush}" FontSize="12"/>
         </StackPanel>
       </ScrollViewer>
       <StackPanel x:Name="ControlsArea" Grid.Row="3" Margin="2,4,2,0">
@@ -265,7 +266,18 @@
               <ComboBoxItem Content="{loc:Text 'Auto (adapts)'}"/>
               <ComboBoxItem Content="{loc:Text 'Balanced'}"/>
               <ComboBoxItem Content="{loc:Text 'Most stable'}"/>
+              <ComboBoxItem Content="{loc:Text 'Custom'}"/>
             </ComboBox>
+            </Grid>
+            <!-- Custom: the delay is set by hand, in steps of 10 ms. Applied a moment after the
+                 slider stops, because each change reconnects the speaker. -->
+            <Grid x:Name="CustomDelayRow" MinHeight="42" Visibility="{Binding CustomDelay, Converter={StaticResource BoolVisibility}}">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="58"/>
+              </Grid.ColumnDefinitions>
+              <Slider x:Name="CustomDelaySlider" Minimum="40" Maximum="300" TickFrequency="10" IsSnapToTickEnabled="True" SmallChange="10" LargeChange="20" VerticalAlignment="Center" Value="{Binding CustomDelayMs, Mode=TwoWay, Delay=700}" AutomationProperties.Name="{loc:Text 'Delay'}" ToolTip="{loc:Text 'Lower means less lag behind video. If the speaker goes silent, the value is too low for it: raise it.'}"/>
+              <TextBlock Grid.Column="1" Text="{Binding CustomDelayLabel}" Style="{StaticResource Hint}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
             </Grid>
             <Border Height="1" Background="{DynamicResource GlassEdgeBrush}" Opacity="0.55" SnapsToDevicePixels="True"/>
             <CheckBox x:Name="StandbyOption" Style="{StaticResource Switch}" IsChecked="{Binding StandbyEnabled, Mode=TwoWay}" Content="{loc:Text 'Release the speaker when silent'}" ToolTip="{loc:Text 'After three minutes without sound, Airplay lets go of the speaker so other devices can use it, and reconnects when sound plays again. The first moment of that sound is not heard.'}"/>
@@ -279,6 +291,10 @@
             <CheckBox Style="{StaticResource Switch}" x:Name="BlurOption" IsChecked="{Binding PanelBlurEnabled, Mode=TwoWay}" Content="{loc:Text 'Blur what is behind the panel'}" ToolTip="{loc:Text 'Shows a blurred view of the screen through the panel. Turn it off if the panel looks wrong.'}"/>
             <Border Height="1" Background="{DynamicResource GlassEdgeBrush}" Opacity="0.55" SnapsToDevicePixels="True"/>
             <CheckBox Style="{StaticResource Switch}" x:Name="DirectCaptureOption" IsChecked="{Binding DirectCapture, Mode=TwoWay}" IsEnabled="{Binding DirectCaptureAvailable}" Content="{loc:Text 'Capture apps directly'}" ToolTip="{loc:Text 'Takes audio from apps before the PC speakers, so the PC can stay muted. Turn off if the speaker goes silent.'}"/>
+            <Border Height="1" Background="{DynamicResource GlassEdgeBrush}" Opacity="0.55" SnapsToDevicePixels="True"/>
+            <CheckBox Style="{StaticResource Switch}" x:Name="MacModeOption" IsChecked="{Binding MacMode, Mode=TwoWay}" Content="{loc:Text 'Low latency (Mac mode)'}" ToolTip="{loc:Text 'Experimental. Connects to a HomePod the way a Mac does and sends uncompressed audio, which may let it play with a shorter delay. Turn it off if the speaker will not connect or stays silent.'}"/>
+            <Border Height="1" Background="{DynamicResource GlassEdgeBrush}" Opacity="0.55" SnapsToDevicePixels="True"/>
+            <CheckBox Style="{StaticResource Switch}" x:Name="OnlyHomePodsOption" IsChecked="{Binding OnlyHomePods, Mode=TwoWay}" Content="{loc:Text 'Only show HomePods'}" ToolTip="{loc:Text 'Leaves televisions and other AirPlay devices out of the list.'}"/>
           </StackPanel>
         </Border>
       </StackPanel>

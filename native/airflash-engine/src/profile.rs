@@ -26,6 +26,11 @@ pub struct Profile {
     pub clock_strategy: Option<ClockStrategy>,
     #[serde(default)]
     pub latency_ms: Option<u32>,
+    /// Experimental: set the session up the way a Mac does for a HomePod mini 2's
+    /// low-latency mode (a Mac identity and a wide latency range). Observed in the
+    /// homepod-mini-linux project to play at a 70 ms lead; not documented by Apple.
+    #[serde(default)]
+    pub mac_mode: bool,
 }
 /// The clock arrangements tried in turn on a standalone HomePod on software 27.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]

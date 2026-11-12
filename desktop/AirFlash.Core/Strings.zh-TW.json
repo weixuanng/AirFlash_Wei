@@ -393,5 +393,12 @@
   "Back": "返回",
   "Advanced": "進階",
   "Release the speaker when silent": "無聲時釋放揚聲器",
-  "After three minutes without sound, Airplay lets go of the speaker so other devices can use it, and reconnects when sound plays again. The first moment of that sound is not heard.": "三分鐘沒有聲音後，Airplay 會釋放揚聲器，讓其他裝置使用，並在再次播放聲音時重新連線。那段聲音的最初片刻聽不到。"
+  "After three minutes without sound, Airplay lets go of the speaker so other devices can use it, and reconnects when sound plays again. The first moment of that sound is not heard.": "三分鐘沒有聲音後，Airplay 會釋放揚聲器，讓其他裝置使用，並在再次播放聲音時重新連線。那段聲音的最初片刻聽不到。",
+  "{0} ms": "{0} 毫秒",
+  "Lower means less lag behind video. If the speaker goes silent, the value is too low for it: raise it.": "數值越低，聲音落後畫面越少。如果揚聲器沒有聲音，表示數值太低：請調高。",
+  "Low latency (Mac mode)": "低延遲（Mac 模式）",
+  "Experimental. Connects to a HomePod the way a Mac does and sends uncompressed audio, which may let it play with a shorter delay. Turn it off if the speaker will not connect or stays silent.": "實驗性功能。以 Mac 的方式連線 HomePod 並傳送未壓縮音訊，可能實現更短的延遲。如果揚聲器無法連線或沒有聲音，請關閉。",
+  "Only show HomePods": "僅顯示 HomePod",
+  "Leaves televisions and other AirPlay devices out of the list.": "清單中不顯示電視和其他 AirPlay 裝置。",
+  "Show other AirPlay devices ({0})": "顯示其他 AirPlay 裝置（{0}）"
 }

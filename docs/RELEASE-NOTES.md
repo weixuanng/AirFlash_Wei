@@ -1,22 +1,23 @@
-# Airplay 0.2.16
+# Airplay 0.2.17
 
-Changes since Airplay 0.2.14.
+Changes since Airplay 0.2.16.
 
-## Status island
+## Lower delay (experimental)
 
-- **The black pill over the header now shows what the connection is doing,** not only errors: playing (level bars and the speaker's name), connecting, waiting for another device, standby, and errors. It sizes itself to its text and morphs between states. Click it for the detail; an error still opens by itself.
-- The status lines at the bottom of the panel are gone. The island carries them.
+These two are for finding out how low the delay can go on your speaker. Neither has been tested against a real HomePod.
 
-## Settings
+- **Custom delay.** Delay has a fourth choice, Custom, with a slider from 40 to 300 ms. A speaker asked for less than it can play goes silent without any error, so the lowest value has to be found by ear. The stream reconnects each time the value changes.
+- **Low latency (Mac mode).** Connects to a HomePod the way a Mac does (a Mac identity, uncompressed audio, a wide delay range), following what the open-source homepod-mini-linux project found a HomePod mini 2 accepts at a 70 ms delay. Off by default. Uncompressed audio is about twice the data, so it is more exposed to Wi-Fi loss.
 
-- **Settings have their own page,** behind the new button in the header. Esc or the back arrow returns to the speakers.
-- **Options are switches** in grouped lists.
-- **New: "Release the speaker when silent".** After three minutes without sound, Airplay lets go of the speaker so other devices can use it, and reconnects when sound plays again. The first moment of that sound is not heard. It is off by default.
+## Speakers
 
-## Look
+- **Only HomePods are listed** by default, so televisions and other AirPlay devices no longer appear. "Only show HomePods" in Settings turns this off.
 
-- **Stronger glass:** the panel is more see-through, with brighter edges and a stronger highlight.
+## Fixes
 
-Run **Airplay-0.2.16.msi** to install or upgrade. The portable **Airplay.exe** still works but does not get the firewall rule. Verify downloads with **SHA256SUMS.txt**. Binaries are unsigned, so Windows SmartScreen may ask you to confirm the first run.
+- **The Settings page was cut off at the bottom** when "Blur what is behind the panel" was on. The blurred area kept the height of the speakers page, so the lower rows were cropped. It now follows the panel's size.
+- **A blue outline appeared around the settings button** after going back from Settings with the mouse. Focus now goes to the panel instead of the nearest button.
+
+Run **Airplay-0.2.17.msi** to install or upgrade. The portable **Airplay.exe** still works but does not get the firewall rule. Verify downloads with **SHA256SUMS.txt**. Binaries are unsigned, so Windows SmartScreen may ask you to confirm the first run.
 
 Logs are in `%APPDATA%\Airplay\logs`.

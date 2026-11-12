@@ -103,7 +103,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
     }
     private void NotifyOptions()
     {
-        Notify(nameof(DelayMode)); Notify(nameof(DirectCapture)); Notify(nameof(DirectCaptureAvailable)); Notify(nameof(StandbyEnabled));
+        Notify(nameof(DelayMode)); Notify(nameof(DirectCapture)); Notify(nameof(DirectCaptureAvailable)); Notify(nameof(StandbyEnabled)); Notify(nameof(MacMode)); Notify(nameof(CustomDelay)); Notify(nameof(CustomDelayMs)); Notify(nameof(CustomDelayLabel));
         Notify(nameof(HiddenCount)); Notify(nameof(HasHidden)); Notify(nameof(ShowHiddenLabel));
     }
     /// <summary>
@@ -111,7 +111,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
     /// adaptive (starts at 50 ms and steps up only when the stream has trouble),
     /// fixed 120 ms, or 500 ms so lost packets have time to be sent again.
     /// </summary>
-    private static readonly string[] DelayModes = [LatencyPolicy.Mode, "realtime", "buffered"];
+    private static readonly string[] DelayModes = [LatencyPolicy.Mode, "realtime", "buffered", "custom"];
     public int DelayMode
     {
         get => Math.Max(0, Array.IndexOf(DelayModes, _settings.LatencyMode));
@@ -121,10 +121,56 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
             _settings.LatencyMode = DelayModes[value];
             // Without this the speaker's own minimum replaces the longer buffer.
             _settings.ForceLatency = DelayModes[value] == "buffered";
+            // The stored custom value starts at a second, which nobody picking this wants.
+            if (DelayModes[value] == "custom" && _settings.CustomBufferMs is < MinCustomDelay or > MaxCustomDelay) _settings.CustomBufferMs = 100;
             AppPaths.Log($"Setting delay_mode={DelayModes[value]}");
+            Notify(); Notify(nameof(CustomDelay)); Notify(nameof(CustomDelayMs)); Notify(nameof(CustomDelayLabel)); VolumeChanged();
+        }
+    }
+    // ---- Custom delay: the buffer the speaker is asked for, chosen by hand. Below what
+    // a speaker can play there is silence with no error, so the bottom is found by ear.
+    public const int MinCustomDelay = 40, MaxCustomDelay = 300;
+    public bool CustomDelay => _settings.LatencyMode == "custom";
+    public int CustomDelayMs
+    {
+        get => Math.Clamp(_settings.CustomBufferMs, MinCustomDelay, MaxCustomDelay);
+        set
+        {
+            var delay = Math.Clamp((int)Math.Round(value / 10.0) * 10, MinCustomDelay, MaxCustomDelay);
+            if (delay == _settings.CustomBufferMs) return;
+            _settings.CustomBufferMs = delay;
+            AppPaths.Log($"Setting custom_delay_ms={delay}");
+            Notify(); Notify(nameof(CustomDelayLabel)); VolumeChanged();
+        }
+    }
+    public string CustomDelayLabel => L.Format("{0} ms", CustomDelayMs);
+    /// <summary>Experimental: connect to a HomePod the way a Mac does.</summary>
+    public bool MacMode
+    {
+        get => _settings.MacMode;
+        set
+        {
+            if (value == _settings.MacMode) return;
+            _settings.MacMode = value;
+            AppPaths.Log($"Setting mac_mode={value}");
             Notify(); VolumeChanged();
         }
     }
+    /// <summary>List HomePods only; televisions and other AirPlay devices stay out of the way.</summary>
+    public bool OnlyHomePods
+    {
+        get => _panel.OnlyHomePods;
+        set { if (value == _panel.OnlyHomePods) return; _panel.OnlyHomePods = value; _panel.Save(); AppPaths.Log($"Setting only_homepods={value}"); Notify(); RefreshReceivers(); }
+    }
+    /// <summary>A HomePod, or a stereo pair. A speaker added by hand is always shown, and
+    /// so is one that has not said what it is: only a device known to be something else is left out.</summary>
+    private static bool IsHomePod(Receiver receiver) => receiver.IsManual || receiver.IsGroup
+        || receiver.Peers.Append(receiver).Any(r => r.Model.Length == 0 || r.Model.StartsWith("AudioAccessory", StringComparison.Ordinal) || r.Model.Contains("HomePod", StringComparison.OrdinalIgnoreCase));
+    /// <summary>Devices the HomePod filter is keeping out, offered back only when it has left nothing to connect to.</summary>
+    public int FilteredCount => _panel.OnlyHomePods ? AllReceivers.Count(r => r.Online && !_settings.ReadOptions(r.Id).Hidden && !IsHomePod(r)) : 0;
+    public bool OfferFiltered => FilteredCount > 0 && Receivers.Count == 0;
+    public string ShowFilteredLabel => L.Format("Show other AirPlay devices ({0})", FilteredCount);
+    private bool Listed(Receiver receiver) => !_settings.ReadOptions(receiver.Id).Hidden && (!_panel.OnlyHomePods || IsHomePod(receiver));
     /// <summary>Capture application audio directly, before the playback device's volume
     /// and mute, so the PC's own speakers can stay muted.</summary>
     public bool DirectCapture
@@ -320,7 +366,8 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
             if (!_settings.StartAtLogin) { _settings.StartAtLogin = true; fixedDefaultsChanged = true; }
             if (_settings.Theme != "system") { _settings.Theme = "system"; fixedDefaultsChanged = true; }
             foreach (var options in _settings.Receivers.Values)
-                if (options.LatencyMode is not null || options.ForceLatency is not null) { options.LatencyMode = null; options.ForceLatency = null; fixedDefaultsChanged = true; }
+                // A per-speaker value has no control any more and would silently win over the panel's.
+                if (options.LatencyMode is not null || options.ForceLatency is not null || options.CustomBufferMs is not null) { options.LatencyMode = null; options.ForceLatency = null; options.CustomBufferMs = null; fixedDefaultsChanged = true; }
             if (fixedDefaultsChanged) await SaveSettingsAsync(_settings);
             try { await _autostart.SetAsync(_settings.StartAtLogin); }
             catch (Exception error) { ShowError(error); }
@@ -516,7 +563,8 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
         IEnumerable<Receiver> catalog = AllReceivers;
         if (held && active.Receiver is { } current && catalog.All(r => r.Id != current.Id))
             catalog = catalog.Append(current with { Online = false });
-        var visible = catalog.Where(r => (r.Online || held && r.Id == active.Receiver?.Id) && !_settings.ReadOptions(r.Id).Hidden).ToList();
+        // The speaker in use is always listed, whatever the filters say, so it can be disconnected.
+        var visible = catalog.Where(r => held && r.Id == active.Receiver?.Id || r.Online && Listed(r)).ToList();
         foreach (var row in Receivers.Where(row => visible.All(r => r.Id != row.Receiver.Id)).ToArray()) Receivers.Remove(row);
         for (var i = 0; i < visible.Count; i++)
         {
@@ -525,7 +573,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
             else { row.Receiver = visible[i]; var previous = Receivers.IndexOf(row); if (previous != i) Receivers.Move(previous, i); }
             row.Refresh();
         }
-        Notify(nameof(AllReceivers));
+        Notify(nameof(AllReceivers)); Notify(nameof(FilteredCount)); Notify(nameof(OfferFiltered)); Notify(nameof(ShowFilteredLabel));
         RefreshPrimary();
     }
     private void SessionChanged(SessionSnapshot snapshot) => _dispatcher.BeginInvoke(() => ApplySessionSnapshot(snapshot));
@@ -695,7 +743,7 @@ public sealed class AppViewModel : ObservableObject, IAsyncDisposable
         if (_closing || _asleep || _wakeTarget is not null || IsStopping || Session.NeedsCleanup || Session.RequiresManualReconnect || Session.IsYielding || !EngineReady || _autoSuppressed || Session.Snapshot.IsActive) return;
         // An explicit per-receiver choice wins; otherwise the last-used receiver
         // (AutoConnectLastReceiver) or every receiver (AutoConnectOnDiscover).
-        var eligible = AllReceivers.Where(r => r.Online && r.Complete && !_settings.ReadOptions(r.Id).Hidden
+        var eligible = AllReceivers.Where(r => r.Online && r.Complete && Listed(r)
             && (_settings.ReadOptions(r.Id).AutoConnect ?? (_settings.AutoConnectOnDiscover || _settings.AutoConnectLastReceiver && r.Id == _settings.LastReceiverId)));
         var receiver = eligible.OrderByDescending(r => r.Id == _settings.LastReceiverId).FirstOrDefault();
         if (receiver is not null && !_autoAttempted.Contains(receiver.Id)) await ToggleAsync(receiver, SessionStartIntent.Automatic);

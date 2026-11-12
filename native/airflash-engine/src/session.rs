@@ -715,6 +715,16 @@ impl Member {
         if let Some(group) = &options.group_id {
             setup.push(("groupUUID", string(group)));
         }
+        if peer.profile.mac_mode {
+            // What a Mac says of itself. A HomePod mini 2 is reported to grant its
+            // low-latency session only to a sender that looks like one.
+            setup.push(("model", string("Mac17,9")));
+            setup.push(("osName", string("macOS")));
+            setup.push(("osVersion", string("27.2")));
+            setup.push(("osBuildVersion", string("24K122")));
+            setup.push(("sourceVersion", string("1005.13.1")));
+            setup.push(("statsCollectionEnabled", Value::Boolean(false)));
+        }
         if let Some(id) = clock_id {
             let addresses = Value::Array(vec![string(local.to_string())]);
             let peer_info = if mac_style {
@@ -817,7 +827,13 @@ impl Member {
         ];
         if !member.compat.uses_buffered_stream() {
             stream_fields.push(("latencyMin", number(latency)));
-            stream_fields.push(("latencyMax", number(latency)));
+            // A Mac offers a range, at least two seconds wide, instead of one value.
+            let latency_max = if peer.profile.mac_mode {
+                (latency * 2).max(rate as u64 * 2)
+            } else {
+                latency
+            };
+            stream_fields.push(("latencyMax", number(latency_max)));
         }
         let stream = dictionary(stream_fields);
         emit(
